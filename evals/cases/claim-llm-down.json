@@ -1,0 +1,19 @@
+{
+  "id": "claim-llm-down",
+  "name": "理赔闭环 · Qwen-VL 不可用 → 规则基准定损降级，走保险分支仍闭环",
+  "scenario": "claim",
+  "inject": "llm_down",
+  "actions": [
+    { "type": "wait", "status": "waiting" },
+    { "type": "choose", "choice": "claim" },
+    { "type": "wait", "confirm": true },
+    { "type": "confirm", "decision": "approve" }
+  ],
+  "expect": {
+    "finalStatus": "done",
+    "stepDegraded": { "plan": true },
+    "runDegraded": true,
+    "bookingsDelta": 1,
+    "eventsDelta": 1
+  }
+}

@@ -1,0 +1,29 @@
+# 识途 ShiTu · Render 部署（单服务：API 同源托管前端静态文件，免 CORS/免反代）
+# 部署前在 Render Dashboard 填写 sync:false 的环境变量（见 envVars）。
+services:
+  - type: web
+    name: shitu
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @shitu/shared build && pnpm --filter @shitu/db build && pnpm --filter @shitu/web build && pnpm --filter @shitu/api build
+    startCommand: node apps/api/dist/main.js
+    healthCheckPath: /healthz
+    envVars:
+      - { key: NODE_VERSION, value: "20" }
+      # 状态持久化：libsql://xxx.turso.io（配 TURSO_AUTH_TOKEN，重启不丢）
+      # 未配置时默认 file:./data/shitu.db（免费实例重启后重置，演示可用）
+      - { key: DATABASE_URL, sync: false }
+      - { key: TURSO_AUTH_TOKEN, sync: false }
+      # LLM：provider=dashscope 时需 DASHSCOPE_API_KEY；默认 rule（规则链路，无需 Key）
+      - { key: LLM_PROVIDER, value: dashscope }
+      - { key: LLM_MODEL, value: qwen-plus }
+      - { key: LLM_VL_MODEL, value: qwen-vl-max }
+      - { key: DASHSCOPE_API_KEY, sync: false }
+      # 高德开放平台：未配置返回演示数据，配置后 /api/tools/nearby 自动切实时
+      - { key: AMAP_KEY, sync: false }
+      # 确认单 HMAC 签名密钥（自动生成即可）
+      - { key: CONFIRM_SECRET, generateValue: true }
+      - { key: CONFIRM_TTL_SEC, value: "120" }
+      # 演示节奏（生产演示建议 500–600ms）
+      - { key: CARE_PACE, value: "500" }

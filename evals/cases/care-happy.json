@@ -1,0 +1,18 @@
+{
+  "id": "care-happy",
+  "name": "保养闭环 · 正常链路（感知→方案→比价→确认→执行→归档）",
+  "scenario": "care",
+  "inject": "none",
+  "ttl": 60,
+  "actions": [
+    { "type": "wait", "status": "waiting" },
+    { "type": "confirm", "decision": "approve" }
+  ],
+  "expect": {
+    "finalStatus": "done",
+    "includesSteps": ["sense", "plan", "quote", "confirm", "execute", "writeback"],
+    "runDegraded": false,
+    "bookingsDelta": 1,
+    "eventsDelta": 1
+  }
+}

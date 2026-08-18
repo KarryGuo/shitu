@@ -1,0 +1,18 @@
+{
+  "id": "claim-insurer-timeout",
+  "name": "理赔闭环 · 保险/门店平台超时 → 缓存方案降级，任务仍完成",
+  "scenario": "claim",
+  "inject": "insurer_timeout",
+  "actions": [
+    { "type": "wait", "status": "waiting" },
+    { "type": "choose", "choice": "self" },
+    { "type": "wait", "confirm": true },
+    { "type": "confirm", "decision": "approve" }
+  ],
+  "expect": {
+    "finalStatus": "done",
+    "stepDegraded": { "execute": true },
+    "runDegraded": true,
+    "bookingsDelta": 1
+  }
+}

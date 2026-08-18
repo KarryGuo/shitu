@@ -1,0 +1,16 @@
+{
+  "id": "care-confirm-expired",
+  "name": "保养闭环 · 确认超时 → 任务作废（无确认不执行）",
+  "scenario": "care",
+  "inject": "none",
+  "ttl": 0,
+  "actions": [
+    { "type": "wait", "confirm": true },
+    { "type": "confirm", "decision": "approve" }
+  ],
+  "expect": {
+    "decideError": "CONFIRM_EXPIRED",
+    "finalStatus": "failed",
+    "titleContains": "确认超时"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "shitu",
+  "version": "0.1.0",
+  "private": true,
+  "description": "识途 ShiTu · 面向车主全生命周期的智能用车 Agent",
+  "scripts": {
+    "dev": "pnpm --filter @shitu/web dev",
+    "dev:api": "pnpm --filter @shitu/api dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm --filter @shitu/api test",
+    "eval": "tsx evals/runner.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.1"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}

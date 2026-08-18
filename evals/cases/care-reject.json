@@ -1,0 +1,17 @@
+{
+  "id": "care-reject",
+  "name": "保养闭环 · 拒绝确认 → 无执行零写入",
+  "scenario": "care",
+  "inject": "none",
+  "ttl": 60,
+  "actions": [
+    { "type": "wait", "status": "waiting" },
+    { "type": "confirm", "decision": "reject" }
+  ],
+  "expect": {
+    "finalStatus": "cancelled",
+    "excludesSteps": ["execute", "writeback"],
+    "bookingsDelta": 0,
+    "eventsDelta": 0
+  }
+}

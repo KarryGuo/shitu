@@ -1,0 +1,19 @@
+{
+  "id": "claim-happy",
+  "name": "理赔闭环 · 正常链路（照片→定损→决策→确认→材料与预约→归档）",
+  "scenario": "claim",
+  "inject": "none",
+  "actions": [
+    { "type": "wait", "status": "waiting" },
+    { "type": "choose", "choice": "self" },
+    { "type": "wait", "confirm": true },
+    { "type": "confirm", "decision": "approve" }
+  ],
+  "expect": {
+    "finalStatus": "done",
+    "includesSteps": ["sense", "plan", "quote", "confirm", "execute", "writeback"],
+    "runDegraded": false,
+    "bookingsDelta": 1,
+    "eventsDelta": 1
+  }
+}

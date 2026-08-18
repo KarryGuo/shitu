@@ -1,0 +1,12 @@
+node_modules
+dist
+*.tsbuildinfo
+.env
+.env.local
+# 运行时状态（演示数据落盘）
+apps/api/data
+apps/api/.tmp-data
+data/
+# 内部文档：仅自己可见，不进仓库（评委不可见）
+docs/
+.DS_Store

@@ -1,0 +1,17 @@
+{
+  "id": "care-shop-timeout",
+  "name": "保养闭环 · 门店搜索超时 → 缓存报价降级，任务仍完成",
+  "scenario": "care",
+  "inject": "shop_timeout",
+  "ttl": 60,
+  "actions": [
+    { "type": "wait", "status": "waiting" },
+    { "type": "confirm", "decision": "approve" }
+  ],
+  "expect": {
+    "finalStatus": "done",
+    "stepDegraded": { "quote": true },
+    "runDegraded": true,
+    "bookingsDelta": 1
+  }
+}

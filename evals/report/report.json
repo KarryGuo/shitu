@@ -1,0 +1,563 @@
+{
+  "at": "2026-08-18T15:08:11.539Z",
+  "env": {
+    "DATABASE_URL": ":memory:",
+    "LLM_PROVIDER": "rule",
+    "CARE_PACE": "0",
+    "node": "v24.11.1"
+  },
+  "total": 8,
+  "passed": 8,
+  "failed": 0,
+  "totalMs": 1116,
+  "cases": [
+    {
+      "id": "care-confirm-expired",
+      "name": "保养闭环 · 确认超时 → 任务作废（无确认不执行）",
+      "scenario": "care",
+      "inject": "none",
+      "passed": true,
+      "failures": [],
+      "durationMs": 113,
+      "runId": "run_msysrrqv1",
+      "finalStatus": "failed",
+      "steps": [
+        {
+          "seq": 1,
+          "kind": "sense",
+          "title": "识途 · 主动感知",
+          "degraded": false
+        },
+        {
+          "seq": 2,
+          "kind": "plan",
+          "title": "识途 · 保养方案（rule）",
+          "degraded": false
+        },
+        {
+          "seq": 3,
+          "kind": "quote",
+          "title": "识途 · 三方比价",
+          "degraded": false
+        },
+        {
+          "seq": 4,
+          "kind": "user",
+          "title": "车主",
+          "degraded": false
+        },
+        {
+          "seq": 5,
+          "kind": "confirm",
+          "title": "识途 · 停车确认（无确认不执行）",
+          "degraded": false
+        },
+        {
+          "seq": 6,
+          "kind": "error",
+          "title": "识途 · 确认超时",
+          "degraded": false
+        }
+      ],
+      "degradations": [],
+      "deltas": {
+        "bookings": 0,
+        "events": 0
+      }
+    },
+    {
+      "id": "care-happy",
+      "name": "保养闭环 · 正常链路（感知→方案→比价→确认→执行→归档）",
+      "scenario": "care",
+      "inject": "none",
+      "passed": true,
+      "failures": [],
+      "durationMs": 165,
+      "runId": "run_msysrru0c",
+      "finalStatus": "done",
+      "steps": [
+        {
+          "seq": 1,
+          "kind": "sense",
+          "title": "识途 · 主动感知",
+          "degraded": false
+        },
+        {
+          "seq": 2,
+          "kind": "plan",
+          "title": "识途 · 保养方案（rule）",
+          "degraded": false
+        },
+        {
+          "seq": 3,
+          "kind": "quote",
+          "title": "识途 · 三方比价",
+          "degraded": false
+        },
+        {
+          "seq": 4,
+          "kind": "user",
+          "title": "车主",
+          "degraded": false
+        },
+        {
+          "seq": 5,
+          "kind": "confirm",
+          "title": "识途 · 停车确认（无确认不执行）",
+          "degraded": false
+        },
+        {
+          "seq": 6,
+          "kind": "user",
+          "title": "车主",
+          "degraded": false
+        },
+        {
+          "seq": 7,
+          "kind": "execute",
+          "title": "识途 · 执行",
+          "degraded": false
+        },
+        {
+          "seq": 8,
+          "kind": "writeback",
+          "title": "识途 · 已办完",
+          "degraded": false
+        },
+        {
+          "seq": 9,
+          "kind": "done",
+          "title": "任务闭环",
+          "degraded": false
+        }
+      ],
+      "degradations": [],
+      "deltas": {
+        "bookings": 1,
+        "events": 1
+      }
+    },
+    {
+      "id": "care-llm-down",
+      "name": "保养闭环 · LLM 不可用 → 规则链路降级，方案仍生成",
+      "scenario": "care",
+      "inject": "llm_down",
+      "passed": true,
+      "failures": [],
+      "durationMs": 160,
+      "runId": "run_msysrrymt",
+      "finalStatus": "done",
+      "steps": [
+        {
+          "seq": 1,
+          "kind": "sense",
+          "title": "识途 · 主动感知",
+          "degraded": false
+        },
+        {
+          "seq": 2,
+          "kind": "plan",
+          "title": "识途 · 保养方案（rule-fallback）",
+          "degraded": true
+        },
+        {
+          "seq": 3,
+          "kind": "quote",
+          "title": "识途 · 三方比价",
+          "degraded": false
+        },
+        {
+          "seq": 4,
+          "kind": "user",
+          "title": "车主",
+          "degraded": false
+        },
+        {
+          "seq": 5,
+          "kind": "confirm",
+          "title": "识途 · 停车确认（无确认不执行）",
+          "degraded": false
+        },
+        {
+          "seq": 6,
+          "kind": "user",
+          "title": "车主",
+          "degraded": false
+        },
+        {
+          "seq": 7,
+          "kind": "execute",
+          "title": "识途 · 执行",
+          "degraded": false
+        },
+        {
+          "seq": 8,
+          "kind": "writeback",
+          "title": "识途 · 已办完",
+          "degraded": false
+        },
+        {
+          "seq": 9,
+          "kind": "done",
+          "title": "任务闭环",
+          "degraded": false
+        }
+      ],
+      "degradations": [
+        "LLM 不可用，已降级为规则链路生成方案（内容确定性不受影响）"
+      ],
+      "deltas": {
+        "bookings": 1,
+        "events": 1
+      }
+    },
+    {
+      "id": "care-reject",
+      "name": "保养闭环 · 拒绝确认 → 无执行零写入",
+      "scenario": "care",
+      "inject": "none",
+      "passed": true,
+      "failures": [],
+      "durationMs": 114,
+      "runId": "run_msysrs321a",
+      "finalStatus": "cancelled",
+      "steps": [
+        {
+          "seq": 1,
+          "kind": "sense",
+          "title": "识途 · 主动感知",
+          "degraded": false
+        },
+        {
+          "seq": 2,
+          "kind": "plan",
+          "title": "识途 · 保养方案（rule）",
+          "degraded": false
+        },
+        {
+          "seq": 3,
+          "kind": "quote",
+          "title": "识途 · 三方比价",
+          "degraded": false
+        },
+        {
+          "seq": 4,
+          "kind": "user",
+          "title": "车主",
+          "degraded": false
+        },
+        {
+          "seq": 5,
+          "kind": "confirm",
+          "title": "识途 · 停车确认（无确认不执行）",
+          "degraded": false
+        },
+        {
+          "seq": 6,
+          "kind": "done",
+          "title": "识途 · 已取消",
+          "degraded": false
+        }
+      ],
+      "degradations": [],
+      "deltas": {
+        "bookings": 0,
+        "events": 0
+      }
+    },
+    {
+      "id": "care-shop-timeout",
+      "name": "保养闭环 · 门店搜索超时 → 缓存报价降级，任务仍完成",
+      "scenario": "care",
+      "inject": "shop_timeout",
+      "passed": true,
+      "failures": [],
+      "durationMs": 193,
+      "runId": "run_msysrs681l",
+      "finalStatus": "done",
+      "steps": [
+        {
+          "seq": 1,
+          "kind": "sense",
+          "title": "识途 · 主动感知",
+          "degraded": false
+        },
+        {
+          "seq": 2,
+          "kind": "plan",
+          "title": "识途 · 保养方案（rule）",
+          "degraded": false
+        },
+        {
+          "seq": 3,
+          "kind": "quote",
+          "title": "识途 · 三方比价",
+          "degraded": true
+        },
+        {
+          "seq": 4,
+          "kind": "user",
+          "title": "车主",
+          "degraded": false
+        },
+        {
+          "seq": 5,
+          "kind": "confirm",
+          "title": "识途 · 停车确认（无确认不执行）",
+          "degraded": false
+        },
+        {
+          "seq": 6,
+          "kind": "user",
+          "title": "车主",
+          "degraded": false
+        },
+        {
+          "seq": 7,
+          "kind": "execute",
+          "title": "识途 · 执行",
+          "degraded": false
+        },
+        {
+          "seq": 8,
+          "kind": "writeback",
+          "title": "识途 · 已办完",
+          "degraded": false
+        },
+        {
+          "seq": 9,
+          "kind": "done",
+          "title": "任务闭环",
+          "degraded": false
+        }
+      ],
+      "degradations": [
+        "门店开放平台响应超时（2×0ms），已降级为本地缓存报价，价格可能过期"
+      ],
+      "deltas": {
+        "bookings": 1,
+        "events": 1
+      }
+    },
+    {
+      "id": "claim-happy",
+      "name": "理赔闭环 · 正常链路（照片→定损→决策→确认→材料与预约→归档）",
+      "scenario": "claim",
+      "inject": "none",
+      "passed": true,
+      "failures": [],
+      "durationMs": 107,
+      "runId": "run_msysrsbm22",
+      "finalStatus": "done",
+      "steps": [
+        {
+          "seq": 1,
+          "kind": "sense",
+          "title": "识途 · 已接收照片",
+          "degraded": false
+        },
+        {
+          "seq": 2,
+          "kind": "plan",
+          "title": "识途 · 定损结果（rule · 附置信度）",
+          "degraded": false
+        },
+        {
+          "seq": 3,
+          "kind": "quote",
+          "title": "识途 · 决策参考：走保险还是自费？",
+          "degraded": false
+        },
+        {
+          "seq": 4,
+          "kind": "user",
+          "title": "车主",
+          "degraded": false
+        },
+        {
+          "seq": 5,
+          "kind": "confirm",
+          "title": "识途 · 停车确认（无确认不执行）",
+          "degraded": false
+        },
+        {
+          "seq": 6,
+          "kind": "user",
+          "title": "车主",
+          "degraded": false
+        },
+        {
+          "seq": 7,
+          "kind": "execute",
+          "title": "识途 · 执行",
+          "degraded": false
+        },
+        {
+          "seq": 8,
+          "kind": "writeback",
+          "title": "识途 · 已办完",
+          "degraded": false
+        },
+        {
+          "seq": 9,
+          "kind": "done",
+          "title": "任务闭环",
+          "degraded": false
+        }
+      ],
+      "degradations": [],
+      "deltas": {
+        "bookings": 1,
+        "events": 1
+      }
+    },
+    {
+      "id": "claim-insurer-timeout",
+      "name": "理赔闭环 · 保险/门店平台超时 → 缓存方案降级，任务仍完成",
+      "scenario": "claim",
+      "inject": "insurer_timeout",
+      "passed": true,
+      "failures": [],
+      "durationMs": 117,
+      "runId": "run_msysrsel2l",
+      "finalStatus": "done",
+      "steps": [
+        {
+          "seq": 1,
+          "kind": "sense",
+          "title": "识途 · 已接收照片",
+          "degraded": false
+        },
+        {
+          "seq": 2,
+          "kind": "plan",
+          "title": "识途 · 定损结果（rule · 附置信度）",
+          "degraded": false
+        },
+        {
+          "seq": 3,
+          "kind": "quote",
+          "title": "识途 · 决策参考：走保险还是自费？",
+          "degraded": false
+        },
+        {
+          "seq": 4,
+          "kind": "user",
+          "title": "车主",
+          "degraded": false
+        },
+        {
+          "seq": 5,
+          "kind": "confirm",
+          "title": "识途 · 停车确认（无确认不执行）",
+          "degraded": false
+        },
+        {
+          "seq": 6,
+          "kind": "user",
+          "title": "车主",
+          "degraded": false
+        },
+        {
+          "seq": 7,
+          "kind": "execute",
+          "title": "识途 · 执行",
+          "degraded": true
+        },
+        {
+          "seq": 8,
+          "kind": "writeback",
+          "title": "识途 · 已办完",
+          "degraded": false
+        },
+        {
+          "seq": 9,
+          "kind": "done",
+          "title": "任务闭环",
+          "degraded": false
+        }
+      ],
+      "degradations": [
+        "保险/门店开放平台响应超时，已降级为本地缓存方案（营业信息可能变化，以门店确认为准）"
+      ],
+      "deltas": {
+        "bookings": 1,
+        "events": 1
+      }
+    },
+    {
+      "id": "claim-llm-down",
+      "name": "理赔闭环 · Qwen-VL 不可用 → 规则基准定损降级，走保险分支仍闭环",
+      "scenario": "claim",
+      "inject": "llm_down",
+      "passed": true,
+      "failures": [],
+      "durationMs": 140,
+      "runId": "run_msysrshv34",
+      "finalStatus": "done",
+      "steps": [
+        {
+          "seq": 1,
+          "kind": "sense",
+          "title": "识途 · 已接收照片",
+          "degraded": false
+        },
+        {
+          "seq": 2,
+          "kind": "plan",
+          "title": "识途 · 定损结果（rule-fallback · 附置信度）",
+          "degraded": true
+        },
+        {
+          "seq": 3,
+          "kind": "quote",
+          "title": "识途 · 决策参考：走保险还是自费？",
+          "degraded": false
+        },
+        {
+          "seq": 4,
+          "kind": "user",
+          "title": "车主",
+          "degraded": false
+        },
+        {
+          "seq": 5,
+          "kind": "confirm",
+          "title": "识途 · 停车确认（无确认不执行）",
+          "degraded": false
+        },
+        {
+          "seq": 6,
+          "kind": "user",
+          "title": "车主",
+          "degraded": false
+        },
+        {
+          "seq": 7,
+          "kind": "execute",
+          "title": "识途 · 执行",
+          "degraded": false
+        },
+        {
+          "seq": 8,
+          "kind": "writeback",
+          "title": "识途 · 已办完",
+          "degraded": false
+        },
+        {
+          "seq": 9,
+          "kind": "done",
+          "title": "任务闭环",
+          "degraded": false
+        }
+      ],
+      "degradations": [
+        "视觉模型不可用，已降级为规则基准定损（建议人工核实）"
+      ],
+      "deltas": {
+        "bookings": 1,
+        "events": 1
+      }
+    }
+  ]
+}

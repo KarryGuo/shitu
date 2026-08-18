@@ -1,0 +1,18 @@
+{
+  "name": "识途 ShiTu · 智能用车 Agent",
+  "short_name": "识途",
+  "description": "识车之途，护你前路 —— 给每一辆车一份懂它的档案，给每一位车主一个会办事的伙伴",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F2F1EC",
+  "theme_color": "#14181D",
+  "lang": "zh-CN",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

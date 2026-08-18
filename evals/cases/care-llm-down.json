@@ -1,0 +1,16 @@
+{
+  "id": "care-llm-down",
+  "name": "保养闭环 · LLM 不可用 → 规则链路降级，方案仍生成",
+  "scenario": "care",
+  "inject": "llm_down",
+  "ttl": 60,
+  "actions": [
+    { "type": "wait", "status": "waiting" },
+    { "type": "confirm", "decision": "approve" }
+  ],
+  "expect": {
+    "finalStatus": "done",
+    "stepDegraded": { "plan": true },
+    "runDegraded": true
+  }
+}
