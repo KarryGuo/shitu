@@ -6,7 +6,7 @@ services:
     runtime: node
     plan: free
     region: singapore
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @shitu/shared build && pnpm --filter @shitu/db build && pnpm --filter @shitu/web build && pnpm --filter @shitu/api build
+    buildCommand: npm install -g pnpm@10 && pnpm install --frozen-lockfile && pnpm --filter @shitu/shared build && pnpm --filter @shitu/db build && pnpm --filter @shitu/web build && pnpm --filter @shitu/api build
     startCommand: node apps/api/dist/main.js
     healthCheckPath: /healthz
     envVars:

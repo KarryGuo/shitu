@@ -2,6 +2,7 @@
   "name": "shitu",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@10.17.0",
   "description": "识途 ShiTu · 面向车主全生命周期的智能用车 Agent",
   "scripts": {
     "dev": "pnpm --filter @shitu/web dev",
