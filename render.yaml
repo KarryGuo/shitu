@@ -10,7 +10,7 @@ services:
     startCommand: node apps/api/dist/main.js
     healthCheckPath: /healthz
     envVars:
-      - { key: NODE_VERSION, value: "20" }
+      - { key: NODE_VERSION, value: "22" }
       # 状态持久化：libsql://xxx.turso.io（配 TURSO_AUTH_TOKEN，重启不丢）
       # 未配置时默认 file:./data/shitu.db（免费实例重启后重置，演示可用）
       - { key: DATABASE_URL, sync: false }
