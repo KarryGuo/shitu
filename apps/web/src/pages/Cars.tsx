@@ -390,7 +390,7 @@ function AddCarCard({ onDone, collapsible }: { onDone?: () => void; collapsible?
           </div>
           <div>
             <label className="field-label">当前里程（km）*</label>
-            <input className="field" type="number" min={0} placeholder="如：43200" value={form.mileage} onChange={(e) => set('mileage', e.target.value)} />
+            <input className="field" type="number" min={0} placeholder="如：30000" value={form.mileage} onChange={(e) => set('mileage', e.target.value)} />
           </div>
           <div>
             <label className="field-label">保险到期日 *</label>

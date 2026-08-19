@@ -140,8 +140,10 @@ function AerialRoad() {
       <line x1="560" y1="-20" x2="560" y2="800" stroke="#FFC72C" strokeWidth="20" opacity="0.16" filter="url(#hGlow)" />
       <line x1="560" y1="-20" x2="560" y2="800" stroke="#FFC72C" strokeWidth="13" strokeLinecap="butt" strokeDasharray="42 38" className="road-dash" />
 
-      {/* 车道光痕 */}
-      <polygon points="612,340 638,340 646,780 586,780" fill="url(#hTrail)" />
+      {/* 车道光痕：去程车的大灯照出的光（与车同周期亮起、渐散） */}
+      <g className="car-trail">
+        <polygon points="612,340 638,340 646,780 586,780" fill="url(#hTrail)" />
+      </g>
 
       {/* 龙门架 + 指路牌 */}
       <g>
@@ -156,12 +158,12 @@ function AerialRoad() {
         <text x="560" y="88" textAnchor="middle" fontSize="10.5" fill="rgba(255,255,255,.8)" letterSpacing="2" fontFamily="'Barlow Condensed',sans-serif">SHITU SERVICE · 2 km →</text>
       </g>
 
-      {/* 里程石：已入档 */}
-      <g transform="translate(388,600) rotate(-3)">
+      {/* 里程石：每一程都入档（品牌石，不绑定具体里程） */}
+      <g transform="translate(388,600)">
         <rect width="64" height="46" rx="8" fill="#eceade" stroke="#b9b7ae" strokeWidth="2" />
         <rect x="3" y="3" width="58" height="10" rx="5" fill="#0D7A4F" />
-        <text x="32" y="32" textAnchor="middle" fontSize="14.5" fontWeight="700" fill="#1B1F24" fontFamily="'Barlow Condensed',sans-serif">43,200</text>
-        <text x="32" y="42" textAnchor="middle" fontSize="8" fill="#5d646d" fontFamily="'Noto Sans SC',sans-serif">km · 已入档</text>
+        <text x="32" y="30" textAnchor="middle" fontSize="14" fontWeight="700" fill="#1B1F24" letterSpacing="1" fontFamily="'ZCOOL QingKe HuangYou','Noto Sans SC',sans-serif">每一程</text>
+        <text x="32" y="41" textAnchor="middle" fontSize="8" fill="#5d646d" letterSpacing="1" fontFamily="'Noto Sans SC',sans-serif">都 · 入 · 档</text>
       </g>
 
       {/* 去程车：驶向远方 */}
@@ -231,7 +233,7 @@ function LedTicker() {
 
 /* ---------- 桌面端里程轨道：随滚动行驶 ---------- */
 function JourneyRail({ progress }: { progress: number }) {
-  const km = Math.round(progress * 43200)
+  const pct = Math.round(progress * 100)
   return (
     <div className="hidden xl:flex fixed left-[30px] top-0 bottom-0 z-40 pointer-events-none flex-col items-center" aria-hidden>
       <span className="bg-asphalt/85 text-white/55 text-[10.5px] font-num tracking-[.18em] rounded px-1.5 py-0.5">K0 · 出发</span>
@@ -250,7 +252,7 @@ function JourneyRail({ progress }: { progress: number }) {
               <circle cx="43" cy="23" r="4" fill="#1B1F24" />
               <circle cx="43" cy="23" r="1.6" fill="#f2f1ec" />
             </svg>
-            <span className="font-num text-mark text-[10.5px] font-bold leading-none whitespace-nowrap">{km.toLocaleString()} km</span>
+            <span className="font-num text-mark text-[10.5px] font-bold leading-none whitespace-nowrap">已行 {pct}%</span>
           </div>
         </div>
       </div>
@@ -654,7 +656,7 @@ export default function Home() {
                   { date: '2025-04', label: '续保 · 商业险' },
                   { date: '2025-11', label: '年检通过' },
                 ]}
-                now={{ km: '43,200', label: '今天 · 此刻' }}
+                now={{ km: '此刻', label: '下一段旅程 · 由你续写' }}
                 future={[
                   { date: '即将', label: '三保 · 建议比 3 家' },
                   { date: '2026-05', label: '保险到期', urgent: true },

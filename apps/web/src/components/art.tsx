@@ -84,12 +84,12 @@ export function PerspectiveRoad({ className = '' }: { className?: string }) {
         )
       })}
 
-      {/* 里程石：已走过的路在发光 */}
-      <g className="km-stone" transform="translate(96,446) rotate(-2)">
+      {/* 里程碑石：每一程都算数（不绑定具体里程） */}
+      <g className="km-stone" transform="translate(96,446)">
         <rect width="58" height="44" rx="8" fill="#eceade" stroke="#b9b7ae" strokeWidth="2" />
         <rect x="3" y="3" width="52" height="10" rx="5" fill="#0D7A4F" />
-        <text x="29" y="31" textAnchor="middle" fontSize="15" fontWeight="700" fill="#1B1F24" fontFamily="'Barlow Condensed',sans-serif">43,200</text>
-        <text x="29" y="41" textAnchor="middle" fontSize="8.5" fill="#5d646d" fontFamily="'Noto Sans SC',sans-serif">km · 已走过</text>
+        <text x="29" y="30" textAnchor="middle" fontSize="14" fontWeight="700" fill="#1B1F24" letterSpacing="1" fontFamily="'ZCOOL QingKe HuangYou','Noto Sans SC',sans-serif">每一程</text>
+        <text x="29" y="40" textAnchor="middle" fontSize="8" fill="#5d646d" letterSpacing="1" fontFamily="'Noto Sans SC',sans-serif">都 · 算 · 数</text>
       </g>
 
       {/* 前路之光：车灯束（护你前路） */}
@@ -385,7 +385,7 @@ export function JourneyStrip({
               className="font-num text-[15px] font-bold text-mark leading-none mb-1"
               style={{ textShadow: '0 0 10px rgba(255,199,44,.65)' }}
             >
-              {now.km} km
+              {now.km}
             </span>
             <span className="text-[11px] text-white/60 leading-none mb-1">{now.label ?? '今天 · 此刻'}</span>
             <svg viewBox="0 0 56 26" className="w-11 h-[21px]">
