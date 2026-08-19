@@ -2,9 +2,26 @@
  * 高德开放平台适配器（§0 原则 3：外部服务走适配器 + 环境变量切换）：
  * - 未配置 AMAP_KEY → 返回演示数据（source: 'sim'），接口契约与真实实现一致
  * - 配置 AMAP_KEY → 真实调用 restapi.amap.com（Web 服务 API · 周边搜索）
+ * - 配置 AMAP_SIG（数字签名私钥）→ 请求自动携带 sig 参数（应用开启数字签名后必填）
  * - 调用失败 / 超时 → 降级演示数据并如实标注（与门店搜索降级语义一致）
  * 导航链接走 uri.amap.com（Web URI，无需 Key）。
  */
+import { createHash } from 'node:crypto'
+
+/**
+ * 高德数字签名：应用开启「数字签名」后所有 Web 服务请求必须携带 sig。
+ * 规则（官方）：请求参数按 key 字典序升序 → "k1=v1&k2=v2"（原始值，不 URL 编码）
+ * → 末尾拼接私钥 → MD5（32 位小写）。未配置 AMAP_SIG 则返回 null（普通调用）。
+ */
+function amapSig(params: URLSearchParams): string | null {
+  const secret = process.env.AMAP_SIG
+  if (!secret) return null
+  const qs = [...params.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([k, v]) => `${k}=${v}`)
+    .join('&')
+  return createHash('md5').update(qs + secret, 'utf8').digest('hex')
+}
 
 export type NearbyKind = 'charging' | 'gas' | 'wash'
 
@@ -104,6 +121,8 @@ export async function nearbySearch(
       offset: '8',
       extensions: 'base',
     })
+    const sig = amapSig(params)
+    if (sig) params.set('sig', sig)
     const res = await fetch(`https://restapi.amap.com/v3/place/around?${params}`, { signal: ctl.signal })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const j = (await res.json()) as {

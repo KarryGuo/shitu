@@ -21,7 +21,9 @@ services:
       - { key: LLM_VL_MODEL, value: qwen-vl-max }
       - { key: DASHSCOPE_API_KEY, sync: false }
       # 高德开放平台：未配置返回演示数据，配置后 /api/tools/nearby 自动切实时
+      # 需「Web服务」类型 Key；开启数字签名后另配 AMAP_SIG（私钥，请求自动携带 sig）
       - { key: AMAP_KEY, sync: false }
+      - { key: AMAP_SIG, sync: false }
       # 确认单 HMAC 签名密钥（自动生成即可）
       - { key: CONFIRM_SECRET, generateValue: true }
       - { key: CONFIRM_TTL_SEC, value: "120" }
