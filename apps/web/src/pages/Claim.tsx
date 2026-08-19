@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { RunTimeline, ToolChips, type TStep } from '../components/RunTimeline'
 import { ConfirmCard } from '../components/ConfirmCard'
-import { SectionHead, Note } from '../components/ui'
+import { SectionHead, Note, NoCarGuard } from '../components/ui'
 import { RoadProgress } from '../components/art'
 import { useApp } from '../stores/app'
 import { api } from '../api/client'
@@ -33,6 +33,7 @@ export default function Claim() {
   const [photo, setPhoto] = useState<string | null>(null)
   const hydrated = useRef<string | null>(null)
   const hydrate = useApp((s) => s.hydrate)
+  const cars = useApp((s) => s.cars)
 
   const status = run?.status
   const terminal = status === 'done' || status === 'failed' || status === 'cancelled' || status === 'interrupted'
@@ -105,6 +106,9 @@ export default function Claim() {
   }))
 
   const assess = run?.steps.find((s) => s.assess)?.assess
+
+  // 空车库守卫：无档案不发起任务（档案由车主自己录入，识途不预填）
+  if (cars.length === 0) return <NoCarGuard scene="发起理赔护航" />
 
   return (
     <div className="pb-10">
