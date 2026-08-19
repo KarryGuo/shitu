@@ -389,9 +389,23 @@ export default function Home() {
               >
                 管理看板
               </Link>
-              <Link to={mainTo} className="btn btn-bronze !py-1.5 !px-4 !text-[14px] whitespace-nowrap">
-                {user ? '回到车库' : '车主入口'}
-              </Link>
+              {user ? (
+                <Link to={mainTo} className="btn btn-bronze !py-1.5 !px-4 !text-[14px] whitespace-nowrap">
+                  回到车库
+                </Link>
+              ) : (
+                <>
+                  <Link
+                    to="/login"
+                    className="inline-flex text-[13.5px] text-white/75 border border-white/25 rounded-lg px-3 py-1.5 hover:border-mark hover:text-mark transition-colors font-medium whitespace-nowrap"
+                  >
+                    登录
+                  </Link>
+                  <Link to="/register" className="btn btn-bronze !py-1.5 !px-4 !text-[14px] whitespace-nowrap">
+                    注册
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -423,9 +437,23 @@ export default function Home() {
               </p>
 
               <div className="flex flex-wrap items-center gap-3.5 mt-9 anim-up" style={{ animationDelay: '300ms' }}>
-                <Link to={mainTo} className="btn btn-bronze !px-7 !py-3 !text-[16px]">
-                  {mainLabel} <span className="font-num">→</span>
-                </Link>
+                {user ? (
+                  <Link to={mainTo} className="btn btn-bronze !px-7 !py-3 !text-[16px]">
+                    {mainLabel} <span className="font-num">→</span>
+                  </Link>
+                ) : (
+                  <>
+                    <Link to="/register" className="btn btn-bronze !px-7 !py-3 !text-[16px]">
+                      免费注册 · 建立我的车库 <span className="font-num">→</span>
+                    </Link>
+                    <Link
+                      to="/login"
+                      className="btn !bg-transparent !text-white !py-3 !px-6 !text-[15px] border-[1.5px] border-white/35 hover:!border-mark hover:!text-mark"
+                    >
+                      已有账号 · 登录 <span className="font-num">→</span>
+                    </Link>
+                  </>
+                )}
                 <Link
                   to="/admin"
                   className="btn !bg-transparent !text-white !py-3 !px-6 !text-[15px] border-[1.5px] border-white/35 hover:!border-mark hover:!text-mark"
@@ -668,7 +696,7 @@ export default function Home() {
                   lane="车主车道"
                   en="CAR OWNERS"
                   title="车主入口"
-                  sub="登录 / 注册 · 邮箱一步进入"
+                  sub="登录 · 邮箱一步进入"
                   desc="建立你的车辆档案，把保养、年检、理赔交给识途照看"
                   cta="进入识途"
                 />
@@ -683,6 +711,10 @@ export default function Home() {
                   cta="打开看板"
                 />
               </div>
+              <p className="text-center mt-12 text-[14px] text-white/65 reveal">
+                第一次来？<Link to="/register" className="text-mark font-bold hover:underline">免费注册 →</Link>
+                <span className="text-white/40 ml-2">注册后车库为空，车辆档案由你自己录入，识途不预填任何假数据</span>
+              </p>
             </div>
           </div>
         </section>
@@ -708,7 +740,10 @@ export default function Home() {
             <div className="flex flex-col gap-2.5 text-[14px] md:ml-auto">
               <span className="text-white/40 text-[12px] tracking-[.24em] font-num font-semibold">QUICK LINKS · 快速通道</span>
               <Link to="/login" className="text-white/70 hover:text-mark transition-colors">
-                车主入口 · 登录/注册 →
+                车主入口 · 登录 →
+              </Link>
+              <Link to="/register" className="text-white/70 hover:text-mark transition-colors">
+                新用户 · 免费注册 →
               </Link>
               <Link to="/admin" className="text-white/70 hover:text-mark transition-colors">
                 管理员看板 →
