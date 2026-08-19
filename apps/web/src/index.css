@@ -626,10 +626,6 @@
   animation: driveToward 11s linear infinite;
   animation-delay: 3s;
 }
-/* 夜色小城：窗灯呼吸明灭 */
-.win-glow {
-  animation: dotBlink 6s ease-in-out infinite;
-}
 /* 下滑提示箭头 */
 @keyframes scrollHint {
   0%,

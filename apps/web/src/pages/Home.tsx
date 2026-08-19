@@ -71,20 +71,8 @@ function SectionHead({
 /* ============================================================
    夜航国道 —— 俯瞰视角的夜路 Hero：
    中央黄虚线向下流动，去程车（大灯照向远方）渐行渐小，来车大灯迎面，
-   龙门架挂着「识途服务区」指路牌；左侧乡野村落灯火，右侧夜色城市。
+   龙门架挂着「识途服务区」指路牌，路两侧乡野村落灯火。
    ============================================================ */
-
-/* 右侧远景小城：x/w/h/y（y 为楼脚基线）—— 贴地平线铺开的低层楼宇，离公路留出空地 */
-const CITY_BLOCKS = [
-  { x: 712, w: 26, h: 22, y: 186 },
-  { x: 748, w: 20, h: 17, y: 176 },
-  { x: 776, w: 30, h: 26, y: 190 },
-  { x: 814, w: 22, h: 19, y: 172 },
-  { x: 844, w: 34, h: 28, y: 184 },
-  { x: 886, w: 24, h: 20, y: 170 },
-  { x: 918, w: 30, h: 24, y: 186 },
-  { x: 954, w: 24, h: 18, y: 176 },
-]
 function AerialRoad() {
   return (
     <svg viewBox="0 0 1000 780" preserveAspectRatio="xMidYMid slice" className="absolute inset-0 w-full h-full" aria-hidden>
@@ -105,10 +93,6 @@ function AerialRoad() {
           <stop offset="0" stopColor="#fff8dc" stopOpacity="0.55" />
           <stop offset="1" stopColor="#fff8dc" stopOpacity="0" />
         </linearGradient>
-        <radialGradient id="hCityGlow" cx="0.5" cy="0.5" r="0.5">
-          <stop offset="0" stopColor="#f7d774" stopOpacity="0.16" />
-          <stop offset="1" stopColor="#f7d774" stopOpacity="0" />
-        </radialGradient>
         <linearGradient id="hCone" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#fff8dc" stopOpacity="0.55" />
           <stop offset="1" stopColor="#fff8dc" stopOpacity="0" />
@@ -131,63 +115,16 @@ function AerialRoad() {
         <path d="M0 680 Q 280 640 520 700 T 1000 660" />
       </g>
 
-      {/* 村落灯火（左侧乡野） */}
+      {/* 村落灯火 */}
       {[
-        [110, 190], [170, 235], [92, 255], [130, 585], [92, 620], [60, 380],
+        [110, 190], [170, 235], [92, 255], [856, 330], [905, 362],
+        [130, 585], [92, 620], [872, 600], [918, 648], [790, 120], [60, 380], [940, 470],
       ].map(([x, y], i) => (
         <g key={i}>
           <circle cx={x} cy={y} r="18" fill="url(#hVillage)" />
           <circle cx={x} cy={y} r={i % 3 === 0 ? 2.8 : 2} fill="#f7d774" opacity="0.95" />
         </g>
       ))}
-
-      {/* 右侧远景：夜色小城 —— 离公路留出空地，楼宇贴地平线、山墙面朝路侧 */}
-      <g>
-        <ellipse cx="836" cy="178" rx="160" ry="60" fill="url(#hCityGlow)" />
-        {/* 远排剪影（更远、更矮、不亮窗） */}
-        {[
-          [718, 140, 16, 10], [754, 134, 14, 8], [802, 138, 18, 11],
-          [848, 132, 15, 9], [894, 140, 17, 10], [936, 134, 14, 8],
-        ].map(([x, y, w, h], i) => (
-          <rect key={`far-${i}`} x={x} y={y} width={w} height={h} rx="1" fill="#10151c" />
-        ))}
-        {/* 近排：低层楼宇（屋顶 + 朝路山墙面 + 亮窗正面，透视朝向路尽头） */}
-        {CITY_BLOCKS.map((b, i) => {
-          const yt = b.y - b.h
-          const dx = -6 // 朝灭点（路尽头）收进：山墙面朝向马路一侧
-          const dy = -5
-          return (
-            <g key={i}>
-              {/* 朝路侧的山墙面（暗面） */}
-              <polygon points={`${b.x},${yt} ${b.x},${yt + b.h} ${b.x + dx},${yt + b.h + dy} ${b.x + dx},${yt + dy}`} fill="#0f141b" />
-              {/* 屋顶面 */}
-              <polygon points={`${b.x},${yt} ${b.x + b.w},${yt} ${b.x + b.w + dx},${yt + dy} ${b.x + dx},${yt + dy}`} fill="#1b222b" />
-              {/* 正面 */}
-              <rect x={b.x} y={yt} width={b.w} height={b.h} rx="1.5" fill="#151b23" stroke="#1d242d" strokeWidth="0.8" />
-              {/* 亮着的窗（暖光为主，零星冷光，少数呼吸明灭） */}
-              {Array.from({ length: Math.max(1, Math.floor((b.h - 7) / 9)) }).flatMap((_, r) =>
-                Array.from({ length: Math.max(1, Math.floor((b.w - 6) / 8)) }).map((_, c) => {
-                  const seed = (r * 5 + c * 3 + i * 7) % 9
-                  if (seed > 3) return null
-                  return (
-                    <rect
-                      key={`${r}-${c}`}
-                      x={b.x + 4 + c * 8}
-                      y={yt + 4 + r * 9}
-                      width="3"
-                      height="4"
-                      rx="0.6"
-                      fill={seed === 2 ? '#cfe0ee' : '#f7d774'}
-                      opacity={seed === 3 ? 0.9 : 0.55 + seed * 0.13}
-                      className={seed === 3 ? 'win-glow' : undefined}
-                    />
-                  )
-                }),
-              )}
-            </g>
-          )
-        })}
-      </g>
 
       {/* 路基 · 路面 */}
       <polygon points="486,0 634,0 782,780 338,780" fill="#111419" />
