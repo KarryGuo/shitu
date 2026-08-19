@@ -21,8 +21,8 @@ function rich(text: string): ReactNode {
 
 const INJECTS: { value: InjectMode; label: string; hint: string }[] = [
   { value: 'none', label: '正常链路', hint: '全链路真实执行（Qwen-VL 真实调用）' },
-  { value: 'insurer_timeout', label: '演练 · 门店查询超时', hint: '工具失败 → 缓存方案降级' },
-  { value: 'llm_down', label: '演练 · 视觉模型不可用', hint: 'Qwen-VL 故障 → 规则基准定损' },
+  { value: 'insurer_timeout', label: '门店查询超时', hint: '工具超时 → 自动降级缓存方案' },
+  { value: 'llm_down', label: '视觉模型不可用', hint: 'Qwen-VL 故障 → 自动降级规则定损' },
 ]
 
 export default function Claim() {
@@ -109,7 +109,7 @@ export default function Claim() {
   return (
     <div className="pb-10">
       <SectionHead
-        kicker="闭环演示 ② · CLAIM COPILOT"
+        kicker="场景闭环 ② · CLAIM COPILOT"
         title="理赔护航：一张照片，把小剐蹭变成小事"
         sub="上传损伤照片（或用样例照片），识途经多模态识别（Qwen-VL，可降级）给出定损参考与「自费还是走保险」决策对比，车主选择并确认后生成材料清单与门店方案，最终归档至车历。"
       />
@@ -118,13 +118,13 @@ export default function Claim() {
         {/* ===== 柏油演示台 ===== */}
         <div className="bg-asphalt text-white px-5 md:px-6 pt-4">
           <div className="flex flex-wrap items-center gap-3.5">
-            <span className="font-sign text-[19px] tracking-[.08em]">理赔护航 · 多模态任务演示</span>
+            <span className="font-sign text-[19px] tracking-[.08em]">理赔护航 · 多模态任务闭环</span>
             <span className="ledboard !rounded-[6px] px-2.5 py-[3px] text-[12px]">
               {run ? `run=${run.id.slice(-6)} · ${run.status}` : 'scenario=claim · 后端真实执行'}
             </span>
             <div className="ml-auto flex gap-2.5">
               <button className="btn btn-bronze !py-2 !px-5 !text-[14.5px]" onClick={start} disabled={starting || phase === 'running' || phase === 'waiting'}>
-                {phase === 'done' ? '重新演示' : starting ? '创建任务…' : photo ? '用我的照片开始' : '使用样例照片开始'}
+                {phase === 'done' ? '再次发起' : starting ? '创建任务…' : photo ? '用我的照片发起' : '使用样例照片发起'}
               </button>
               <button
                 className="btn !py-2 !px-5 !text-[14.5px] !bg-transparent !text-white/80 !border !border-white/25 hover:!border-white/60 hover:!text-white"
@@ -137,7 +137,7 @@ export default function Claim() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 mt-3">
-            <span className="text-[12.5px] text-white/45 tracking-[.05em]">异常演练：</span>
+            <span className="text-[12.5px] text-white/45 tracking-[.05em]">异常注入：</span>
             {INJECTS.map((o) => (
               <button
                 key={o.value}
@@ -159,7 +159,7 @@ export default function Claim() {
 
           <RoadProgress steps={Math.min(run?.steps.length ?? 0, 6)} waiting={phase === 'waiting'} done={phase === 'done'} />
           <div className="text-white/45 text-[13px] pb-3 -mt-1">
-            演示路线：照片接收 → 多模态定损 → 决策参考（<b className="text-mark">你来选</b>）→ 人工确认 → 材料与预约 → 归档
+            任务链路：照片接收 → 多模态定损 → 决策参考（<b className="text-mark">你来选</b>）→ 人工确认 → 材料与预约 → 归档
           </div>
         </div>
 

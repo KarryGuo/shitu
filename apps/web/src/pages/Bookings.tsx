@@ -23,7 +23,7 @@ export default function Bookings() {
       />
 
       {bookings.length === 0 ? (
-        <EmptyState text="暂无预约单 · 去「保养」或「理赔」演示里创建一个" />
+        <EmptyState text="暂无预约单 · 去「保养」或「理赔」发起任务后自动生成" />
       ) : (
         <div className="flex flex-col gap-3.5">
           {bookings.map((b, i) => {

@@ -66,7 +66,7 @@ export function ConfirmCard({
                 onApprove()
               }}
             >
-              抬杆放行 · 确认执行
+              确认执行
             </button>
             <button
               className="btn btn-ghost !py-2 !px-5 !text-[14.5px]"
@@ -78,12 +78,12 @@ export function ConfirmCard({
               再想想
             </button>
             <span className={`text-[12.5px] ${left <= 30 ? 'text-mark-deep font-bold' : 'text-faint'}`}>
-              过期自动落杆
+              超时自动作废
             </span>
           </div>
         ) : (
           <div className="mt-1.5 text-[14.5px] font-bold">
-            {done === 'approved' && <span className="text-hwy">已确认 · 抬杆放行，开始执行</span>}
+            {done === 'approved' && <span className="text-hwy">已确认 · 开始执行</span>}
             {done === 'rejected' && <span className="text-sub">已取消 · 可随时重新发起</span>}
             {done === 'expired' && <span className="text-mark-deep">确认已过期 · 请重新发起方案</span>}
           </div>

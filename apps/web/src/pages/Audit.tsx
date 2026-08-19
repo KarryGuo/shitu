@@ -151,7 +151,7 @@ export default function Audit() {
                     <span className={`text-[12px] font-bold rounded-md px-2 py-0.5 ${m.cls}`}>{m.label}</span>
                     <b className="text-[14.5px]">场景 · {r.scenario}</b>
                     {r.inject !== 'none' && (
-                      <span className="text-[12px] font-bold rounded-md px-2 py-0.5 bg-[#F9E9E2] text-[#B4552D]">注入 {r.inject}</span>
+                      <span className="text-[12px] font-bold rounded-md px-2 py-0.5 bg-[#F9E9E2] text-[#B4552D]">异常注入 {r.inject}</span>
                     )}
                     <span className="num text-faint text-[13px]">{r.steps.length} 步</span>
                     {r.degradations.length > 0 && (

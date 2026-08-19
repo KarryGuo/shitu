@@ -82,9 +82,9 @@ export default function Settings() {
         <button
           className="btn btn-ghost !border-line !text-sub mt-5 !py-2 !px-5 !text-[14.5px] ml-3"
           onClick={() => resetDemo()}
-          title="将车辆、提醒、预约恢复为初始样例（大赛演示用）"
+          title="将车辆、提醒、预约恢复为初始样例"
         >
-          恢复演示样例数据
+          重置样例数据
         </button>
       </div>
 
@@ -92,7 +92,7 @@ export default function Settings() {
       <div className="mt-5 reveal">
         <Note>
           <b>数据合规：</b>识途最小化采集 —— 不存 VIN 明文（仅 sha256 哈希），照片存 R2 且 30 天自动清理；删除账号时级联删除车辆、事件与消息并清理对象存储。
-          本演示所有车辆、门店、价格均为构造样例，不涉及真实个人信息。
+          体验环境中的车辆、门店、价格均为构造样例，不涉及真实个人信息。
         </Note>
       </div>
 

@@ -22,8 +22,8 @@ function rich(text: string): ReactNode {
 
 const INJECTS: { value: InjectMode; label: string; hint: string }[] = [
   { value: 'none', label: '正常链路', hint: '全链路真实执行' },
-  { value: 'shop_timeout', label: '演练 · 门店搜索超时', hint: '工具失败 → 缓存报价降级' },
-  { value: 'llm_down', label: '演练 · LLM 不可用', hint: 'LLM 故障 → 规则链路降级' },
+  { value: 'shop_timeout', label: '门店搜索超时', hint: '工具超时 → 自动降级缓存报价' },
+  { value: 'llm_down', label: 'LLM 不可用', hint: 'LLM 故障 → 自动降级规则链路' },
 ]
 
 export default function Care() {
@@ -103,22 +103,22 @@ export default function Care() {
   return (
     <div className="pb-10">
       <SectionHead
-        kicker="闭环演示 ① · PROACTIVE CARE"
+        kicker="场景闭环 ① · PROACTIVE CARE"
         title="保养管家：从「发现」到「办完」"
-        sub="时间线的每一步都由后端编排器真实执行：规则感知 → 手册检索 → 方案生成（LLM 可降级）→ 三方比价 → 人工确认（HMAC token + 120 秒有效期）→ 幂等预约 → 档案回写。支持注入故障，亲历降级链路。"
+        sub="时间线的每一步都由后端编排器真实执行：规则感知 → 手册检索 → 方案生成（LLM 可降级）→ 三方比价 → 人工确认（HMAC token + 120 秒有效期）→ 幂等预约 → 档案回写。可选异常注入，现场验证降级能力。"
       />
 
       <div className="card overflow-hidden anim-up">
         {/* ===== 柏油演示台：控制条 + 公路进度 ===== */}
         <div className="bg-asphalt text-white px-5 md:px-6 pt-4">
           <div className="flex flex-wrap items-center gap-3.5">
-            <span className="font-sign text-[19px] tracking-[.08em]">保养管家 · 任务闭环演示</span>
+            <span className="font-sign text-[19px] tracking-[.08em]">保养管家 · 任务闭环</span>
             <span className="ledboard !rounded-[6px] px-2.5 py-[3px] text-[12px]">
               {run ? `run=${run.id.slice(-6)} · ${run.status}` : 'scenario=care · 后端真实执行'}
             </span>
             <div className="ml-auto flex gap-2.5">
               <button className="btn btn-bronze !py-2 !px-5 !text-[14.5px]" onClick={play} disabled={starting || phase === 'running' || phase === 'waiting'}>
-                {phase === 'done' ? '重新演示' : starting ? '创建任务…' : '开始演示'}
+                {phase === 'done' ? '再次发起' : starting ? '创建任务…' : '发起保养任务'}
               </button>
               <button
                 className="btn !py-2 !px-5 !text-[14.5px] !bg-transparent !text-white/80 !border !border-white/25 hover:!border-white/60 hover:!text-white"
@@ -130,9 +130,9 @@ export default function Care() {
             </div>
           </div>
 
-          {/* 异常演练开关（复赛评审：异常处理与降级） */}
+          {/* 异常注入（混沌测试：验证降级与容错能力） */}
           <div className="flex flex-wrap items-center gap-2 mt-3">
-            <span className="text-[12.5px] text-white/45 tracking-[.05em]">异常演练：</span>
+            <span className="text-[12.5px] text-white/45 tracking-[.05em]">异常注入：</span>
             {INJECTS.map((o) => (
               <button
                 key={o.value}
@@ -155,7 +155,7 @@ export default function Care() {
           {/* 公路进度：感 案 价 确 行 成 */}
           <RoadProgress steps={run?.steps.length ?? 0} waiting={phase === 'waiting'} done={phase === 'done'} />
           <div className="text-white/45 text-[13px] pb-3 -mt-1">
-            演示路线：主动感知 → 手册检索 → 方案生成 → 三方比价 → <b className="text-mark">人工确认（等你抬杆）</b> → 预约执行 → 档案回写
+            任务链路：主动感知 → 手册检索 → 方案生成 → 三方比价 → <b className="text-mark">人工确认（无确认不执行）</b> → 预约执行 → 档案回写
           </div>
         </div>
 
@@ -175,7 +175,7 @@ export default function Care() {
 
         {!run && !apiError && (
           <div className="text-faint text-[14.5px] text-center pb-8 -mt-2">
-            点击上方「开始演示」，识途将真实执行一次完整的保养任务闭环 —— 最后一步需要你亲手确认。
+            点击上方「发起保养任务」，识途将真实执行一次完整的任务闭环 —— 花钱的事，最后一步由你亲手确认。
           </div>
         )}
         {apiError && (

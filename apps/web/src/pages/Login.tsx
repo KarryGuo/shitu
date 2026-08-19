@@ -3,6 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import { useApp } from '../stores/app'
 import { PerspectiveRoad } from '../components/art'
 
+/**
+ * 登录：邮箱即身份，一步进入（体验环境免验证）。
+ * 正式版规划：邮箱验证码 / 短信 OTP / 微信登录 —— 架构预留（store.login 已按身份隔离数据入口）。
+ */
+
 /** 龙门架指路牌方向项 */
 function WaySign({ text, sub, delay }: { text: string; sub: string; delay: number }) {
   return (
@@ -18,12 +23,18 @@ function WaySign({ text, sub, delay }: { text: string; sub: string; delay: numbe
 
 export default function Login() {
   const [email, setEmail] = useState('')
-  const [sent, setSent] = useState(false)
-  const [sending, setSending] = useState(false)
+  const [entering, setEntering] = useState(false)
   const login = useApp((s) => s.login)
   const navigate = useNavigate()
 
   const valid = /.+@.+\..+/.test(email)
+
+  const enter = () => {
+    if (!valid || entering) return
+    setEntering(true)
+    login(email)
+    navigate('/cars')
+  }
 
   return (
     <div className="relative min-h-screen flex flex-col overflow-hidden bg-[#101419] text-[#EDEAE2]">
@@ -52,7 +63,7 @@ export default function Login() {
 
           <div className="mt-8 md:mt-10 max-w-[520px]">
             <div className="kicker !text-mark anim-up" style={{ animationDelay: '60ms' }}>
-              GOAI 无界应用 · AI + 汽车
+              AI AGENT · 智能用车管家
             </div>
             <h1 className="font-display text-[32px] md:text-[42px] leading-[1.32] mt-4 anim-up" style={{ animationDelay: '140ms' }}>
               识途识的不是路，
@@ -80,70 +91,38 @@ export default function Login() {
             <div className="p-6 md:p-7">
               <div className="flex items-center gap-2.5 flex-wrap">
                 <span className="sign sign-sm !rounded-[8px] px-3 py-1 font-sign text-[15px] tracking-[.1em] leading-none flex items-center h-[30px]">服务区 · 登记</span>
-                <span className="font-num text-[12px] tracking-[.22em] text-faint font-semibold">MAGIC LINK</span>
+                <span className="font-num text-[12px] tracking-[.22em] text-faint font-semibold">EMAIL SIGN-IN</span>
               </div>
               <h2 className="font-display text-[26px] mt-4">进入识途</h2>
               <p className="text-sub text-[14px] mt-1.5 mb-6 leading-[1.9]">
-                输入邮箱，发送一条登录链接完成验证；短信 OTP 通道随后接入。
+                输入邮箱即可进入；正式版接入邮箱验证码与短信 OTP 登录。
               </p>
 
-              {!sent ? (
-                <form
-                  className="flex flex-col gap-4"
-                  onSubmit={(e) => {
-                    e.preventDefault()
-                    if (!valid) return
-                    setSending(true)
-                    setTimeout(() => {
-                      setSending(false)
-                      setSent(true)
-                    }, 900)
-                  }}
-                >
-                  <div>
-                    <label className="field-label">邮箱地址</label>
-                    <input
-                      className="field"
-                      type="email"
-                      placeholder="you@example.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      autoFocus
-                    />
-                  </div>
-                  <button className="btn btn-ink w-full !py-3" disabled={!valid || sending}>
-                    {sending ? <span className="thinking"><span /><span /><span /></span> : '发送登录链接'}
-                  </button>
-                  <p className="text-[12.5px] text-faint leading-[1.9]">
-                    登录即表示同意《用户协议》与《隐私政策》。识途最小化采集：不存 VIN 明文，照片 30 天自动清理，注销级联删除全部数据。
-                  </p>
-                </form>
-              ) : (
-                <div className="anim-up">
-                  <div className="flex items-center gap-3">
-                    <span className="w-11 h-11 rounded-full bg-hwy-tint text-hwy flex items-center justify-center text-[22px] font-bold shrink-0">✓</span>
-                    <div>
-                      <div className="font-bold text-[16.5px]">登录链接已发送</div>
-                      <div className="text-[13px] text-faint">链接 15 分钟内有效</div>
-                    </div>
-                  </div>
-                  <div className="mt-4 rounded-[10px] border border-dashed border-hwy/40 bg-hwy-tint/60 px-4 py-3 text-[14px] text-hwy-deep">
-                    收件邮箱：<b className="num !font-semibold text-[15px]">{email}</b>
-                  </div>
-                  <button
-                    className="btn btn-bronze w-full mt-5 !py-3"
-                    onClick={() => {
-                      login(email)
-                      navigate('/cars')
-                    }}
-                  >
-                    演示：模拟已点击链接进入
-                  </button>
-                  <button className="btn btn-ghost w-full mt-3 !py-2.5 !text-[14px]" onClick={() => setSent(false)}>
-                    换一个邮箱
-                  </button>
+              <form
+                className="flex flex-col gap-4"
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  enter()
+                }}
+              >
+                <div>
+                  <label className="field-label">邮箱地址</label>
+                  <input
+                    className="field"
+                    type="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    autoFocus
+                  />
                 </div>
-              )}
+                <button className="btn btn-ink w-full !py-3" disabled={!valid || entering}>
+                  {entering ? <span className="thinking"><span /><span /><span /></span> : '进入识途'}
+                </button>
+                <p className="text-[12.5px] text-faint leading-[1.9]">
+                  登录即表示同意《用户协议》与《隐私政策》。识途最小化采集：不存 VIN 明文，照片 30 天自动清理，注销级联删除全部数据。
+                </p>
+              </form>
             </div>
           </div>
 

@@ -112,9 +112,9 @@ export function AppShell() {
             <div className="text-[14px] text-faint mt-1.5">
               识途取意「老马识途」—— 识的不是路，是你的车走过的路。识途 ShiTu · 面向车主全生命周期的智能用车 Agent
             </div>
-            <div className="text-[12.5px] text-faint/80 mt-0.5">本站为参赛演示 · 样例数据，不涉及真实个人信息</div>
+            <div className="text-[12.5px] text-faint/80 mt-0.5">体验环境 · 数据为样例，不涉及真实个人信息</div>
           </div>
-          <span className="plate ml-auto">GOAI · 2026</span>
+          <span className="plate ml-auto">识途 · 2026</span>
         </div>
       </footer>
 
