@@ -88,7 +88,7 @@ export function PerspectiveRoad({ className = '' }: { className?: string }) {
       <g className="km-stone" transform="translate(96,446)">
         <rect width="58" height="44" rx="8" fill="#eceade" stroke="#b9b7ae" strokeWidth="2" />
         <rect x="3" y="3" width="52" height="10" rx="5" fill="#0D7A4F" />
-        <text x="29" y="30" textAnchor="middle" fontSize="14" fontWeight="700" fill="#1B1F24" letterSpacing="1" fontFamily="'Alimama DongFangDaKai','Noto Sans SC',sans-serif">每一程</text>
+        <text x="29" y="30" textAnchor="middle" fontSize="14" fontWeight="700" fill="#1B1F24" letterSpacing="1" fontFamily="'ZCOOL QingKe HuangYou','Noto Sans SC',sans-serif">每一程</text>
         <text x="29" y="40" textAnchor="middle" fontSize="8" fill="#5d646d" letterSpacing="1" fontFamily="'Noto Sans SC',sans-serif">都 · 算 · 数</text>
       </g>
 
@@ -112,7 +112,7 @@ export function PerspectiveRoad({ className = '' }: { className?: string }) {
         <rect x="336" y="441" width="24" height="8" rx="4" fill="#ffd0cc" opacity="0.8" />
         <rect x="440" y="441" width="24" height="8" rx="4" fill="#ffd0cc" opacity="0.8" />
         <rect x="374" y="464" width="52" height="18" rx="3" fill="#3f6fb5" stroke="rgba(255,255,255,0.92)" strokeWidth="1.5" />
-        <text x="400" y="477.5" textAnchor="middle" fontSize="11.5" fill="#fff" letterSpacing="2" fontFamily="'Alimama DongFangDaKai','Noto Sans SC',sans-serif">识途</text>
+        <text x="400" y="477.5" textAnchor="middle" fontSize="11.5" fill="#fff" letterSpacing="2" fontFamily="'ZCOOL QingKe HuangYou','Noto Sans SC',sans-serif">识途</text>
       </g>
 
       {/* 龙门架 */}
@@ -126,7 +126,7 @@ export function PerspectiveRoad({ className = '' }: { className?: string }) {
       <g>
         <rect x="232" y="88" width="336" height="78" rx="12" fill="#0D7A4F" />
         <rect x="241" y="97" width="318" height="60" rx="7" fill="none" stroke="rgba(255,255,255,.85)" strokeWidth="2.5" />
-        <text x="400" y="128" textAnchor="middle" fontSize="30" fill="#fff" fontFamily="'Alimama DongFangDaKai','Noto Sans SC',sans-serif" letterSpacing="6">识途 SHITU</text>
+        <text x="400" y="128" textAnchor="middle" fontSize="30" fill="#fff" fontFamily="'ZCOOL QingKe HuangYou','Noto Sans SC',sans-serif" letterSpacing="6">识途 SHITU</text>
         <text x="400" y="151" textAnchor="middle" fontSize="13" fill="rgba(255,255,255,.85)" fontFamily="'Barlow Condensed',sans-serif" letterSpacing="4">NEXT · 你的专属用车管家</text>
       </g>
 
@@ -136,7 +136,7 @@ export function PerspectiveRoad({ className = '' }: { className?: string }) {
       <g>
         <rect x="262" y="176" width="276" height="34" rx="8" fill="#0D7A4F" />
         <rect x="266" y="180" width="268" height="26" rx="5" fill="none" stroke="rgba(255,255,255,.8)" strokeWidth="1.5" />
-        <text x="400" y="199" textAnchor="middle" fontSize="17" fill="#fff" letterSpacing="5" fontFamily="'Alimama DongFangDaKai','Noto Sans SC',sans-serif">识车之途 · 护你前路</text>
+        <text x="400" y="199" textAnchor="middle" fontSize="17" fill="#fff" letterSpacing="5" fontFamily="'ZCOOL QingKe HuangYou','Noto Sans SC',sans-serif">识车之途 · 护你前路</text>
       </g>
     </svg>
   )
@@ -352,7 +352,7 @@ export function JourneyStrip({
       <div className="overflow-x-auto">
         <div className="relative h-[132px] min-w-[720px] mx-2 mb-2 rounded-[10px] bg-[#14181d]">
           {/* 沥青路面 */}
-          <div className="absolute left-0 right-0 bottom-[18px] h-[34px] bg-[#1e232a] rounded-[6px] />
+          <div className="absolute left-0 right-0 bottom-[18px] h-[34px] bg-[#1e232a] rounded-[6px]" />
           <div className="absolute left-0 right-0 bottom-[50px] h-[2px] bg-white/25" />
           <div className="absolute left-0 right-0 bottom-[20px] h-[2px] bg-white/25" />
           <div
