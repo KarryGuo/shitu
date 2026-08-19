@@ -661,7 +661,6 @@ export default function Home() {
                   { date: '2026-09', label: '年检到期' },
                 ]}
               />
-              <p className="text-[12px] text-white/35 mt-3 text-right">· 上图为演示数据</p>
             </div>
           </div>
         </section>

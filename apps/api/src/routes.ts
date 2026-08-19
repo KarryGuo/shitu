@@ -5,7 +5,7 @@ import { loadUserRows, upsertUserRow } from '@shitu/db'
 import { getState, mutate, loadState, uid, nowIso } from './store.js'
 import { getProfile, resetProfile, seedProfile, setActiveCar } from './profile.js'
 import { createCareRun, createClaimRun, chooseClaim, getRun, decideRun } from './orchestrator.js'
-import { nearbySearch, type NearbyKind } from './amap.js'
+import { nearbySearch, regeoAddress, ipLocate, staticMap, DEMO_LOCATION, type NearbyKind, type LocateResult } from './amap.js'
 import { askAgent } from './ask.js'
 import { seedUsers } from './admin.js'
 
@@ -176,19 +176,76 @@ export async function registerRoutes(app: FastifyInstance) {
     return result
   })
 
-  /* ---------- 地图工具（高德适配器：mock 默认 + AMAP_KEY 真实切换） ---------- */
+  /* ---------- 地图工具（高德适配器：定位 / 周边搜索 / 静态地图，Key 均不出后端） ---------- */
+
+  /** 坐标合法性（境内范围），防注入 */
+  const validCoord = (lng: number, lat: number) =>
+    Number.isFinite(lng) && Number.isFinite(lat) && lng > 73 && lng < 136 && lat > 3 && lat < 54
+
+  /** 定位：优先用浏览器精准定位坐标（前端已转 GCJ-02）逆地理出地址；否则按请求 IP 城市级定位 */
+  app.get('/api/tools/locate', async (req) => {
+    const q = req.query as { lng?: string; lat?: string }
+    if (q.lng !== undefined && q.lat !== undefined) {
+      const lng = Number(q.lng)
+      const lat = Number(q.lat)
+      if (validCoord(lng, lat)) {
+        const location = `${lng.toFixed(6)},${lat.toFixed(6)}`
+        const address = await regeoAddress(location)
+        if (address) return { source: 'gps', location, address } satisfies LocateResult
+        return { source: 'gps', location, address: `当前位置（${lng.toFixed(5)}, ${lat.toFixed(5)}）` } satisfies LocateResult
+      }
+    }
+    // 浏览器定位不可用（拒绝授权 / 无 GPS）→ 按请求方 IP 城市级定位
+    const fwd = String(req.headers['x-forwarded-for'] ?? '').split(',')[0]?.trim()
+    const ip = fwd && /^[\d.:/a-fA-F]{3,45}$/.test(fwd) && !/^(10\.|127\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|localhost)/.test(fwd) ? fwd : undefined
+    const hit = await ipLocate(ip)
+    if (hit) {
+      const address = (await regeoAddress(hit.location)) || hit.city || '当前位置'
+      return { source: 'ip', location: hit.location, address, note: '浏览器精准定位不可用，已按网络位置定位（城市级）' } satisfies LocateResult
+    }
+    return {
+      source: 'default',
+      location: DEMO_LOCATION,
+      address: '湖南省长沙市芙蓉区（默认位置）',
+      note: '定位暂不可用，已使用默认位置',
+    } satisfies LocateResult
+  })
+
+  /** 周边搜索：按定位坐标查最近的充电/加油/洗车（结果按距离升序） */
   app.get('/api/tools/nearby', async (req, reply) => {
     const q = req.query as { kind?: string; lng?: string; lat?: string }
     if (q.kind !== 'charging' && q.kind !== 'gas' && q.kind !== 'wash')
       return reply.status(400).send(err('INVALID_KIND', 'kind must be charging|gas|wash'))
-    const location = q.lng && q.lat ? `${q.lng},${q.lat}` : undefined
+    let location: string | undefined
+    if (q.lng !== undefined && q.lat !== undefined) {
+      const lng = Number(q.lng)
+      const lat = Number(q.lat)
+      if (!validCoord(lng, lat)) return reply.status(400).send(err('INVALID_LOCATION', 'lng/lat 超出有效范围'))
+      location = `${lng.toFixed(6)},${lat.toFixed(6)}`
+    }
     return nearbySearch(q.kind as NearbyKind, location)
   })
 
-  /* ---------- 审计（运行证据：复赛「输出结果可追溯」） ---------- */
+  /** 静态地图代理：Key 留在服务端；用户位置（红）+ 周边 POI（蓝）标注 */
+  app.get('/api/tools/map', async (req, reply) => {
+    const q = req.query as { center?: string; zoom?: string; pois?: string }
+    const coord = (s: string) => /^(\d{2,3}\.\d{1,6}),(\d{1,2}\.\d{1,6})$/.test(s) && validCoord(Number(RegExp.$1), Number(RegExp.$2))
+    if (!q.center || !coord(q.center))
+      return reply.status(400).send(err('INVALID_CENTER', 'center must be lng,lat within China'))
+    const zoom = Math.min(19, Math.max(3, Number(q.zoom) || 14))
+    const pois = (q.pois ?? '').split('|').filter(coord).slice(0, 8)
+    const r = await staticMap(q.center, zoom, pois)
+    if (!r.ok) return reply.status(502).send(err('MAP_UNAVAILABLE', '静态地图获取失败'))
+    reply.header('content-type', r.contentType)
+    reply.header('cache-control', 'public, max-age=300')
+    return reply.send(Buffer.from(r.buf))
+  })
+
+  /* ---------- 审计（运行证据：复赛「输出结果可追溯」） ----------
+   * 消费者侧仅返回最新 100 条（超出部分由管理后台全量查阅） */
   app.get('/api/audit', async () => {
     const s = getState()
-    return { entries: [...s.audit].reverse().slice(0, 50), total: s.audit.length }
+    return { entries: [...s.audit].reverse().slice(0, 100), total: s.audit.length }
   })
 
   /* ---------- 指标看板（轻量管理后台的数据源） ---------- */
@@ -205,6 +262,8 @@ export async function registerRoutes(app: FastifyInstance) {
       if (!t) tools.set(name, (t = { calls: 0, degraded: 0, failed: 0, latencyTotal: 0, latencyN: 0 }))
       return t
     }
+    /* 逐次工具调用记录（新者在前；消费者侧仅保留最新 100 条，更早可在管理后台查阅） */
+    const toolCalls: { at: string; runId: string; scenario: string; name: string; status: string; latencyMs: number | null; note?: string }[] = []
     for (const r of s.runs) {
       byStatus[r.status] = (byStatus[r.status] ?? 0) + 1
       byScenario[r.scenario] = (byScenario[r.scenario] ?? 0) + 1
@@ -223,6 +282,7 @@ export async function registerRoutes(app: FastifyInstance) {
             agg.latencyTotal += t.latencyMs
             agg.latencyN++
           }
+          toolCalls.push({ at: st.at, runId: r.id, scenario: r.scenario, name: t.name, status: t.status, latencyMs: t.latencyMs ?? null, note: t.note })
         }
       }
     }
@@ -254,6 +314,7 @@ export async function registerRoutes(app: FastifyInstance) {
           avgLatencyMs: t.latencyN ? Math.round(t.latencyTotal / t.latencyN) : null,
         }))
         .sort((a, b) => b.calls - a.calls),
+      toolCalls: toolCalls.slice(0, 100),
       providers: {
         llm: process.env.LLM_PROVIDER ?? 'rule',
         dashscopeKey: !!process.env.DASHSCOPE_API_KEY,
@@ -263,6 +324,6 @@ export async function registerRoutes(app: FastifyInstance) {
     }
   })
 
-  /* ---------- 演示辅助：当前运行列表 ---------- */
-  app.get('/api/runs', async () => mutate((s) => ({ runs: s.runs.slice(0, 20) })))
+  /* ---------- 演示辅助：当前运行列表（消费者侧仅最新 100 条，更早在管理后台查阅） ---------- */
+  app.get('/api/runs', async () => mutate((s) => ({ runs: s.runs.slice(0, 100) })))
 }

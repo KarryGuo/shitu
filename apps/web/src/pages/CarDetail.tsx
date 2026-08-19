@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useApp } from '../stores/app'
 import { useReveal } from '../hooks/useReveal'
 import { SectionHead, DarkStat, NoCarGuard } from '../components/ui'
 import { Gauge, CarGlyph } from '../components/art'
-import { api, type NearbyResult } from '../api/client'
+import { api, mapUrl, type NearbyResult, type LocateResult } from '../api/client'
 
 const typeMeta: Record<string, { label: string; cls: string }> = {
   maintenance: { label: '保养', cls: 'bg-hwy-tint text-hwy-deep' },
@@ -21,62 +21,225 @@ const KINDS = [
   { id: 'wash', label: '洗车', icon: '🫧' },
 ] as const
 
+type KindId = (typeof KINDS)[number]['id']
+
+/* ---------- WGS-84（浏览器定位）→ GCJ-02（高德坐标系）转换 ---------- */
+const GCJ = { PI: 3.141592653589793, A: 6378245.0, EE: 0.00669342162296594323 }
+
+function transformLat(x: number, y: number): number {
+  let ret = -100.0 + 2.0 * x + 3.0 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * Math.sqrt(Math.abs(x))
+  ret += ((20.0 * Math.sin(6.0 * x * GCJ.PI) + 20.0 * Math.sin(2.0 * x * GCJ.PI)) * 2.0) / 3.0
+  ret += ((20.0 * Math.sin(y * GCJ.PI) + 40.0 * Math.sin((y / 3.0) * GCJ.PI)) * 2.0) / 3.0
+  ret += ((160.0 * Math.sin((y / 12.0) * GCJ.PI) + 320.0 * Math.sin((y * GCJ.PI) / 30.0)) * 2.0) / 3.0
+  return ret
+}
+
+function transformLng(x: number, y: number): number {
+  let ret = 300.0 + x + 2.0 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * Math.sqrt(Math.abs(x))
+  ret += ((20.0 * Math.sin(6.0 * x * GCJ.PI) + 20.0 * Math.sin(2.0 * x * GCJ.PI)) * 2.0) / 3.0
+  ret += ((20.0 * Math.sin(x * GCJ.PI) + 40.0 * Math.sin((x / 3.0) * GCJ.PI)) * 2.0) / 3.0
+  ret += ((150.0 * Math.sin((x / 12.0) * GCJ.PI) + 300.0 * Math.sin((x / 30.0) * GCJ.PI)) * 2.0) / 3.0
+  return ret
+}
+
+/** 境外坐标原样返回（国测局偏移算法仅适用于境内） */
+function wgs84ToGcj02(lng: number, lat: number): [number, number] {
+  if (lng < 72.004 || lng > 137.8347 || lat < 0.8293 || lat > 55.8271) return [lng, lat]
+  let dLat = transformLat(lng - 105.0, lat - 35.0)
+  let dLng = transformLng(lng - 105.0, lat - 35.0)
+  const radLat = (lat / 180.0) * GCJ.PI
+  let magic = Math.sin(radLat)
+  magic = 1 - GCJ.EE * magic * magic
+  const sqrtMagic = Math.sqrt(magic)
+  dLat = (dLat * 180.0) / (((GCJ.A * (1 - GCJ.EE)) / (magic * sqrtMagic)) * GCJ.PI)
+  dLng = (dLng * 180.0) / ((GCJ.A / sqrtMagic) * Math.cos(radLat) * GCJ.PI)
+  return [lng + dLng, lat + dLat]
+}
+
+/* ---------- 定位来源徽标 ---------- */
+const locSourceMeta: Record<LocateResult['source'], { label: string; cls: string }> = {
+  gps: { label: '精准定位', cls: 'bg-[#E3F1E6] text-[#2E7D46]' },
+  ip: { label: '网络定位 · 城市级', cls: 'bg-[#F7EED8] text-[#8C6A1E]' },
+  default: { label: '默认位置', cls: 'bg-concrete-2 text-sub' },
+}
+
 function NearbyCard() {
-  const [kind, setKind] = useState<(typeof KINDS)[number]['id']>('charging')
-  const [data, setData] = useState<Partial<Record<string, NearbyResult>>>({})
+  const [kind, setKind] = useState<KindId>('charging')
+  const [loc, setLoc] = useState<LocateResult | null>(null)
+  const [locating, setLocating] = useState(true)
+  const [data, setData] = useState<Record<string, NearbyResult>>({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [mapFailed, setMapFailed] = useState(false)
 
-  const current = data[kind]
-  const pick = async (k: (typeof KINDS)[number]['id']) => {
-    setKind(k)
-    if (data[k]) return
-    setLoading(true)
-    setError(null)
-    try {
-      const r = await api.getNearby(k)
-      setData((d) => ({ ...d, [k]: r }))
-    } catch {
-      setError('周边服务暂不可用（后端未启动或网络异常）')
-    } finally {
-      setLoading(false)
+  /** 自动定位：浏览器精准定位（WGS-84→GCJ-02，后端逆地理出地址）→ 失败降级按 IP 定位 → 再兜底默认位置 */
+  const runLocate = useCallback(async () => {
+    setLocating(true)
+    let done = false
+    const finish = (r: LocateResult | null) => {
+      if (!done) {
+        done = true
+        setLoc(r)
+        setLocating(false)
+      }
     }
-  }
+    const locateByIp = async () => {
+      try {
+        finish(await api.locate())
+      } catch {
+        finish(null)
+      }
+    }
+    if (!navigator.geolocation) return void locateByIp()
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const [lng, lat] = wgs84ToGcj02(pos.coords.longitude, pos.coords.latitude)
+        try {
+          finish(await api.locate(lng, lat))
+        } catch {
+          finish({ source: 'gps', location: `${lng.toFixed(6)},${lat.toFixed(6)}`, address: `当前位置（${lng.toFixed(5)}, ${lat.toFixed(5)}）` })
+        }
+      },
+      () => void locateByIp(),
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 },
+    )
+    // 浏览器定位超时兜底（getCurrentPosition 的 timeout 事件个别浏览器不触发）
+    setTimeout(() => {
+      if (!done) void locateByIp()
+    }, 9000)
+  }, [])
+
+  useEffect(() => {
+    void runLocate()
+  }, [runLocate])
+
+  /** 缓存键 = 类目 + 定位点（定位更新后自动按新位置重查） */
+  const cacheKey = (k: KindId) => `${k}@${loc?.location ?? ''}`
+  const current = data[cacheKey(kind)]
+
+  const pick = useCallback(
+    async (k: KindId) => {
+      setKind(k)
+      if (data[cacheKey(k)]) return
+      setLoading(true)
+      setError(null)
+      try {
+        const r = await api.getNearby(k, loc?.location)
+        setData((d) => ({ ...d, [cacheKey(k)]: r }))
+      } catch {
+        setError('周边服务暂不可用（网络异常），请稍后重试')
+      } finally {
+        setLoading(false)
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [loc, data],
+  )
+
+  /** 定位完成后自动查询默认类目（最近的充电桩） */
+  useEffect(() => {
+    if (loc) void pick('charging')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loc?.location])
+
+  /** 地图背景：以用户位置为中心，标注当前位置（红）+ 周边服务商（蓝） */
+  const poiLocs = current?.pois.map((p) => p.location) ?? []
+  const src = loc ? mapUrl(loc.location, poiLocs, 14) : null
 
   return (
-    <div className="card p-6 md:p-7 reveal">
-      <div className="flex flex-wrap items-center gap-3">
-        {KINDS.map((k) => (
-          <button
-            key={k.id}
-            onClick={() => void pick(k.id)}
-            className={`tool-chip ${kind === k.id ? 'done' : ''} ${kind === k.id && loading ? 'running' : ''}`}
+    <div className="card overflow-hidden reveal">
+      {/* ===== 高德地图背景（显示当前位置与周边服务商） ===== */}
+      <div className="relative h-[240px] md:h-[280px] bg-asphalt">
+        {src && !mapFailed ? (
+          <img
+            src={src}
+            alt="当前位置周边地图"
+            className="absolute inset-0 w-full h-full object-cover"
+            onError={() => setMapFailed(true)}
+          />
+        ) : (
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                'linear-gradient(160deg, #232a33 0%, #2b333d 55%, #1d232b 100%)',
+            }}
           >
-            <span>{k.icon}</span> {k.label}
-          </button>
-        ))}
-        {current && (
-          <span
-            className={`ml-auto text-[12px] font-bold rounded-full px-3 py-1 ${
-              current.source === 'live'
-                ? 'bg-[#E3F1E6] text-[#2E7D46]'
-                : 'bg-concrete-2 text-sub'
-            }`}
-            title={current.note}
-          >
-            {current.source === 'live' ? `高德开放平台 · 实时` : '演示数据 · AMAP_KEY 未配置'}
-          </span>
+            <div
+              className="absolute inset-0 opacity-30"
+              style={{
+                backgroundImage:
+                  'linear-gradient(rgba(255,255,255,.08) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.08) 1px, transparent 1px)',
+                backgroundSize: '44px 44px',
+              }}
+            />
+          </div>
         )}
+        {/* 压暗渐变，保证文字可读 */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/10 to-black/30" />
+
+        {/* 顶部：当前位置信息 */}
+        <div className="absolute top-4 left-4 right-4 flex flex-wrap items-center gap-2">
+          <span className="bg-black/55 backdrop-blur-sm text-white text-[13px] font-semibold rounded-full px-3.5 py-1.5 leading-none flex items-center gap-1.5">
+            <span className="text-mark">📍</span>
+            {locating ? '正在定位当前位置…' : (loc?.address ?? '定位暂不可用')}
+          </span>
+          {loc && !locating && (
+            <span className={`text-[11.5px] font-bold rounded-full px-2.5 py-1 ${locSourceMeta[loc.source].cls}`}>
+              {locSourceMeta[loc.source].label}
+            </span>
+          )}
+          <button
+            className="ml-auto bg-black/55 backdrop-blur-sm text-white/90 text-[12px] font-bold rounded-full px-3 py-1.5 leading-none hover:bg-black/75 transition-colors"
+            onClick={() => void runLocate()}
+            title="重新获取当前位置"
+          >
+            ⟳ 重新定位
+          </button>
+        </div>
+        {loc?.note && (
+          <div className="absolute top-[52px] left-4 text-white/80 text-[11.5px] bg-black/45 rounded-full px-3 py-1">
+            {loc.note}
+          </div>
+        )}
+
+        {/* 底部：服务类目选项卡（叠加在地图上） */}
+        <div className="absolute bottom-4 left-4 right-4 flex flex-wrap items-center gap-2.5">
+          {KINDS.map((k) => (
+            <button
+              key={k.id}
+              onClick={() => void pick(k.id)}
+              disabled={locating}
+              className={`tool-chip !px-3.5 !py-2 !text-[13.5px] shadow-[0_2px_10px_rgba(0,0,0,.35)] ${
+                kind === k.id ? 'done' : ''
+              } ${kind === k.id && loading ? 'running' : ''} ${locating ? 'opacity-60' : ''}`}
+            >
+              <span>{k.icon}</span> {k.label}
+            </button>
+          ))}
+          {current && (
+            <span
+              className={`ml-auto text-[11.5px] font-bold rounded-full px-3 py-1.5 ${
+                current.source === 'live' ? 'bg-[#E3F1E6] text-[#2E7D46]' : 'bg-black/55 text-white/85 backdrop-blur-sm'
+              }`}
+              title={current.note}
+            >
+              {current.source === 'live' ? '高德开放平台 · 实时' : '内置示例'}
+            </span>
+          )}
+        </div>
       </div>
 
-      <div className="mt-4 min-h-[120px]">
-        {loading && <div className="text-sub text-[14px] py-6 text-center">正在查询周边…</div>}
+      {/* ===== POI 列表（按距离最近优先） ===== */}
+      <div className="p-5 md:p-6 min-h-[120px]">
+        {loading && <div className="text-sub text-[14px] py-6 text-center">正在按当前位置查询周边最近的服务商…</div>}
         {error && <div className="text-[#B4552D] text-[14px] py-6 text-center">{error}</div>}
         {current && !loading && (
           <>
-            {current.degraded && current.note && (
-              <div className="text-[13px] text-[#8C6A1E] bg-[#F7EED8] rounded-lg px-3.5 py-2 mb-3">
-                ⚠ {current.note}
+            {current.note && (
+              <div className={`text-[13px] rounded-lg px-3.5 py-2 mb-3 ${current.degraded ? 'text-[#8C6A1E] bg-[#F7EED8]' : 'text-sub bg-concrete-2'}`}>
+                {current.degraded ? '⚠ ' : ''}
+                {current.note}
               </div>
             )}
             <div className="flex flex-col">
@@ -100,11 +263,13 @@ function NearbyCard() {
           </>
         )}
         {!current && !loading && !error && (
-          <div className="text-sub text-[14px] py-6 text-center">点击上方类目，查询车辆周边 5 km 内的实时服务。</div>
+          <div className="text-sub text-[14px] py-6 text-center">
+            {locating ? '定位完成后将自动查询周边充电桩。' : '点击上方类目，查询当前位置周边 5 km 内最近的服务商。'}
+          </div>
         )}
       </div>
-      <div className="text-sub text-[12.5px] mt-3">
-        数据来源：高德开放平台周边搜索（配置 AMAP_KEY 即实时）· 导航直达高德地图。
+      <div className="text-sub text-[12.5px] px-5 md:px-6 pb-5">
+        定位与周边搜索由高德开放平台提供（浏览器精准定位，失败自动降级网络定位）· 结果按距离最近优先 · 导航直达高德地图。
       </div>
     </div>
   )
@@ -211,12 +376,12 @@ export default function CarDetail() {
         </div>
       </section>
 
-      {/* ===== 周边服务（高德适配器：mock 默认 + AMAP_KEY 实时切换） ===== */}
+      {/* ===== 周边服务（高德适配器：自动定位 + 实时周边搜索） ===== */}
       <section className="mt-10">
         <SectionHead
           kicker="TOOLS · 周边服务"
           title="高德地图工具箱"
-          sub="经后端适配器调用高德开放平台周边搜索：未配置 AMAP_KEY 时返回同构演示数据，配置后同一接口自动切换为实时 POI，导航直达高德地图。"
+          sub="自动获取当前位置（浏览器精准定位，失败自动降级网络定位），按当前位置实时搜索周边 5 km 内最近的服务商，地图底图直观呈现，导航直达高德地图。"
         />
         <NearbyCard />
       </section>

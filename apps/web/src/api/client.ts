@@ -10,6 +10,14 @@ export interface NearbyResult {
   pois: { name: string; address: string; distance: string; tag: string; location: string; nav: string }[]
 }
 
+/** 定位结果（/api/tools/locate）：gps=浏览器精准定位；ip=网络定位（城市级）；default=兜底默认位置 */
+export interface LocateResult {
+  source: 'gps' | 'ip' | 'default'
+  location: string
+  address: string
+  note?: string
+}
+
 /**
  * API client：dev 经 vite 代理到 localhost:8787；生产同源（或 VITE_API_BASE 指向 api 服务）。
  */
@@ -109,13 +117,32 @@ export const api = {
     inspectionExpiry: string
     lastMaintenanceMileage?: number
   }) => req<ProfileDTO>('/profile/cars', { method: 'POST', body: JSON.stringify(body) }),
-  getNearby: (kind: 'charging' | 'gas' | 'wash') =>
-    req<NearbyResult>(`/tools/nearby?kind=${kind}`),
+  getNearby: (kind: 'charging' | 'gas' | 'wash', location?: string) => {
+    const qs = new URLSearchParams({ kind })
+    if (location) {
+      const [lng, lat] = location.split(',')
+      if (lng && lat) {
+        qs.set('lng', lng)
+        qs.set('lat', lat)
+      }
+    }
+    return req<NearbyResult>(`/tools/nearby?${qs}`)
+  },
+  /** 定位：传浏览器坐标（已转 GCJ-02）得精准定位+逆地理地址；不传则按网络 IP 定位 */
+  locate: (lng?: number, lat?: number) =>
+    req<LocateResult>(`/tools/locate${lng !== undefined && lat !== undefined ? `?lng=${lng}&lat=${lat}` : ''}`),
   getMetrics: () => req<Metrics>('/metrics'),
   getAudit: () => req<AuditFeed>('/audit'),
   getRuns: () => req<{ runs: RunDTO[] }>('/runs'),
   ask: (question: string) =>
     req<AskResult>('/ask', { method: 'POST', body: JSON.stringify({ question }) }),
+}
+
+/** 静态地图 URL（/api/tools/map 图片代理：Key 留在服务端）：用户位置（红）+ 周边 POI（蓝）标注 */
+export function mapUrl(center: string, pois: string[], zoom = 14): string {
+  const qs = new URLSearchParams({ center, zoom: String(zoom) })
+  if (pois.length) qs.set('pois', pois.join('|'))
+  return URL(`/tools/map?${qs}`)
 }
 
 /* ---------- 管理后台（x-admin-token 鉴权） ---------- */
@@ -172,6 +199,9 @@ export const adminApi = {
   updateCar: (id: string, body: { mileage?: number; insuranceExpiry?: string; inspectionExpiry?: string }) =>
     adminReq<{ ok: boolean }>(`/admin/cars/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   deleteCar: (id: string) => adminReq<{ ok: boolean }>(`/admin/cars/${id}`, { method: 'DELETE' }),
+  /** 运行审计（全量查阅：直查数据库，可翻阅比消费者侧更早的历史） */
+  listRuns: () => adminReq<{ total: number; runs: AdminRunSummary[] }>('/admin/runs'),
+  listAudit: () => adminReq<{ total: number; entries: AuditFeed['entries'] }>('/admin/audit'),
 }
 
 export interface AdminOverview {
@@ -240,7 +270,21 @@ export interface Metrics {
   profile: { cars: number; events: number; bookings: number; remindersPending: number }
   audit: { total: number }
   tools: { name: string; calls: number; degraded: number; failed: number; avgLatencyMs: number | null }[]
+  /** 逐次工具调用记录（新者在前，仅最新 100 条；更早在管理后台查阅） */
+  toolCalls: { at: string; runId: string; scenario: string; name: string; status: string; latencyMs: number | null; note?: string }[]
   providers: { llm: string; dashscopeKey: boolean; amap: string; db: string }
+}
+
+/** 管理后台运行摘要（/api/admin/runs，全量） */
+export interface AdminRunSummary {
+  id: string
+  scenario: string
+  status: string
+  inject: string
+  steps: number
+  degradations: number
+  createdAt: string
+  finishedAt: string | null
 }
 
 /** 审计日志（/api/audit） */

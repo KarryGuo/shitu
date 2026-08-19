@@ -10,6 +10,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import { z } from 'zod'
 import {
   ensureSchema, loadUserRows, upsertUserRow, deleteUserRow, countCarsByUser,
+  loadRunRows, loadAuditRows,
 } from '@shitu/db'
 import { getState, mutate } from './store.js'
 import { uid, nowIso } from './store.js'
@@ -131,6 +132,39 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         .slice(0, 6),
       trend: days,
       auditTotal: s.audit.length,
+    }
+  })
+
+  /* ---------- 运行审计（全量查阅） ----------
+   * 车主侧 /api/runs · /api/audit 仅返回最新 100 条；
+   * 此处直查数据库，可翻阅更早的历史记录（内存态裁剪不影响 DB 全量）。 */
+  app.get('/api/admin/runs', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return
+    const rows = await loadRunRows(500)
+    return {
+      total: rows.length,
+      runs: rows.map((r) => ({
+        id: r.id,
+        scenario: r.scenario,
+        status: r.status,
+        inject: r.inject,
+        steps: (JSON.parse(r.steps_json) as unknown[]).length,
+        degradations: (JSON.parse(r.degradations_json) as unknown[]).length,
+        createdAt: r.created_at,
+        finishedAt: r.finished_at ?? null,
+      })),
+    }
+  })
+
+  app.get('/api/admin/audit', async (req, reply) => {
+    if (!requireAdmin(req, reply)) return
+    const rows = await loadAuditRows(2000)
+    return {
+      total: rows.length,
+      // loadAuditRows 为时间正序；翻阅场景新者在前
+      entries: rows
+        .map((r) => ({ at: r.at, actor: r.actor, action: r.action, detail: r.detail ?? undefined, runId: r.run_id ?? undefined }))
+        .reverse(),
     }
   })
 

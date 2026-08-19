@@ -29,6 +29,14 @@ interface InternalState extends Omit<PersistedState, 'audit'> {
 let state: InternalState
 let hydrated: Promise<PersistedState> | null = null
 
+/**
+ * 内存容量：runs 新者在头（unshift），audit 新者在尾（push）。
+ * 超限裁剪最旧数据（数据库保留全量，供管理后台查阅）；
+ * 消费者侧接口另按 100 条上限返回（见 routes.ts）。
+ */
+const MAX_RUNS = 200
+const MAX_AUDIT = 1000
+
 export async function loadState(seed: () => PersistedState): Promise<PersistedState> {
   if (state) return state
   if (hydrated) return hydrated
@@ -36,7 +44,7 @@ export async function loadState(seed: () => PersistedState): Promise<PersistedSt
     await ensureSchema()
 
     const [runRows, auditRows, profileRows] = await Promise.all([
-      loadRunRows(50), loadAuditRows(200), loadProfileRows(),
+      loadRunRows(MAX_RUNS), loadAuditRows(MAX_AUDIT), loadProfileRows(),
     ])
 
     const runs: RunDTO[] = runRows.map((r) => ({
@@ -219,6 +227,9 @@ export function mutate<T>(fn: (s: PersistedState) => T): T {
   const r = fn(state)
   // 新增审计条目补 id（水位跟踪；数组头部裁剪不影响）
   for (const a of state.audit) if (!a.id) a.id = uid('a')
+  // 容量裁剪：只保留最新数据（最旧记录仍在数据库，管理后台可查阅）
+  if (state.runs.length > MAX_RUNS) state.runs = state.runs.slice(0, MAX_RUNS)
+  if (state.audit.length > MAX_AUDIT) state.audit = state.audit.slice(-MAX_AUDIT)
   scheduleFlush()
   return r
 }

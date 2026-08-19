@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { adminApi, type AdminOverview, type AdminUser, type AdminCar } from '../api/client'
+import { adminApi, type AdminOverview, type AdminUser, type AdminCar, type AdminRunSummary, type AuditFeed } from '../api/client'
 import { AuthShell } from '../components/AuthShell'
 
 /**
  * 管理后台（独立于车主端 AppShell）：
- * 口令登录 → 运营看板 / 用户管理 / 车辆管理 三面板。
+ * 口令登录 → 运营看板 / 用户管理 / 车辆管理 / 运行审计 四面板。
  * 所有管理写操作在后端入审计（actor=admin），与车主侧同一本账。
  */
 
-type Tab = 'overview' | 'users' | 'cars'
+type Tab = 'overview' | 'users' | 'cars' | 'audit'
 
 /* ================= 登录门 ================= */
 
@@ -58,7 +58,6 @@ function LoginGate({ onOk }: { onOk: () => void }) {
         <div className="border-t border-dashed border-line pt-3 text-center">
           <span className="text-[13.5px] text-sub">管理口令由环境变量 ADMIN_TOKEN 配置</span>
           <div className="text-[12px] text-faint mt-1.5 leading-[1.8]">
-            演示环境未配置时默认口令 <b className="num">shitu-admin</b> ·{' '}
             <Link to="/login" className="text-hwy-deep font-bold hover:underline">
               前往车主端登录 →
             </Link>
@@ -610,12 +609,239 @@ function CarsPanel() {
   )
 }
 
+/* ================= 运行审计（全量查阅） ================= */
+
+/** 简易分页钩子：数据变化时自动收敛当前页 */
+function usePaged<T>(items: T[], pageSize: number) {
+  const [page, setPage] = useState(1)
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize))
+  const safePage = Math.min(page, totalPages)
+  const paged = items.slice((safePage - 1) * pageSize, safePage * pageSize)
+  return { page: safePage, totalPages, paged, setPage, total: items.length }
+}
+
+function Pager({ page, totalPages, total, onPage }: { page: number; totalPages: number; total: number; onPage: (p: number) => void }) {
+  if (totalPages <= 1) return null
+  return (
+    <div className="flex items-center justify-center gap-3 pt-3.5 pb-1">
+      <button className="btn btn-ghost !py-1.5 !px-3.5 !text-[13px]" disabled={page <= 1} onClick={() => onPage(page - 1)}>
+        上一页
+      </button>
+      <span className="text-faint text-[13px] num">
+        {page} / {totalPages} 页 · 共 {total} 条
+      </span>
+      <button className="btn btn-ghost !py-1.5 !px-3.5 !text-[13px]" disabled={page >= totalPages} onClick={() => onPage(page + 1)}>
+        下一页
+      </button>
+    </div>
+  )
+}
+
+/** 导出 Excel（CSV · UTF-8 BOM） */
+function exportCsv(filename: string, headers: string[], rows: (string | number)[][]) {
+  const esc = (v: string | number) => {
+    const s = String(v ?? '')
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+  }
+  const csv = '\uFEFF' + [headers, ...rows].map((r) => r.map(esc).join(',')).join('\r\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(a.href)
+}
+
+const RUN_STATUS: Record<string, { label: string; cls: string }> = {
+  done: { label: '已完成', cls: 'bg-[#E4EEE2] text-[#3F6B3A]' },
+  waiting: { label: '待确认', cls: 'bg-[#F7EED8] text-[#8C6A1E]' },
+  running: { label: '执行中', cls: 'bg-[#E8EEF4] text-[#3A6B8C]' },
+  failed: { label: '已失败', cls: 'bg-[#F9E9E2] text-[#B4552D]' },
+  cancelled: { label: '已取消', cls: 'bg-concrete-2 text-sub' },
+  interrupted: { label: '已中断', cls: 'bg-concrete-2 text-sub' },
+}
+
+const AUDIT_ACTOR: Record<string, { label: string; cls: string }> = {
+  agent: { label: 'Agent', cls: 'bg-hwy-tint text-hwy-deep' },
+  user: { label: '车主', cls: 'bg-[#E8EEF4] text-[#3A6B8C]' },
+  system: { label: '系统', cls: 'bg-concrete-2 text-sub' },
+  admin: { label: '管理员', cls: 'bg-[#EAE6DA] text-[#6B5B33]' },
+}
+
+const SCENARIO_LABEL: Record<string, string> = { care: '保养', claim: '理赔', trip: '行程', trade: '换车' }
+
+const fmtTime = (iso: string | null) => {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+}
+
+function AdminAuditPanel() {
+  const [runs, setRuns] = useState<AdminRunSummary[]>([])
+  const [audit, setAudit] = useState<AuditFeed['entries']>([])
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    void Promise.all([adminApi.listRuns(), adminApi.listAudit()])
+      .then(([r, a]) => {
+        setRuns(r.runs)
+        setAudit(a.entries)
+      })
+      .catch((e: Error) => setError(e.message))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const runPages = usePaged(runs, 10)
+  const auditPages = usePaged(audit, 10)
+
+  if (error) return <div className="card p-6 text-[#A0522D] font-bold">加载失败：{error}</div>
+  if (loading) return <div className="card p-6 text-sub">运行审计加载中…</div>
+
+  return (
+    <div className="flex flex-col gap-5">
+      {/* 运行列表（全量） */}
+      <div className="card overflow-hidden">
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-line">
+          <span className="kicker !text-hwy !mb-0">RUNS · 运行列表（全量）</span>
+          <span className="text-faint text-[12.5px]">{runs.length} 条记录</span>
+          <button
+            className="btn btn-ghost !py-1.5 !px-3.5 !text-[12.5px] ml-auto"
+            onClick={() =>
+              exportCsv(
+                `运行列表_全量_${new Date().toISOString().slice(0, 10)}.csv`,
+                ['运行ID', '状态', '场景', '异常注入', '步数', '降级次数', '发起时间', '结束时间'],
+                runs.map((r) => [
+                  r.id, RUN_STATUS[r.status]?.label ?? r.status, SCENARIO_LABEL[r.scenario] ?? r.scenario,
+                  r.inject === 'none' ? '' : r.inject, r.steps, r.degradations, fmtTime(r.createdAt), fmtTime(r.finishedAt),
+                ]),
+              )
+            }
+          >
+            导出 Excel
+          </button>
+        </div>
+        <div className="overflow-x-auto">
+          {runs.length === 0 ? (
+            <p className="text-sub text-[13.5px] px-5 py-6 text-center">暂无运行记录。</p>
+          ) : (
+            <table className="w-full text-[13.5px]">
+              <thead>
+                <tr className="text-left text-faint text-[12px] border-b border-line">
+                  <th className="px-5 py-2.5 font-semibold">运行 ID</th>
+                  <th className="px-3 py-2.5 font-semibold">状态</th>
+                  <th className="px-3 py-2.5 font-semibold">场景</th>
+                  <th className="px-3 py-2.5 font-semibold">异常注入</th>
+                  <th className="px-3 py-2.5 font-semibold">步数</th>
+                  <th className="px-3 py-2.5 font-semibold">降级</th>
+                  <th className="px-3 py-2.5 font-semibold">发起时间</th>
+                  <th className="px-5 py-2.5 font-semibold">结束时间</th>
+                </tr>
+              </thead>
+              <tbody>
+                {runPages.paged.map((r) => {
+                  const m = RUN_STATUS[r.status] ?? RUN_STATUS.running
+                  return (
+                    <tr key={r.id} className="border-b border-line/60 hover:bg-white/60">
+                      <td className="px-5 py-2.5 font-num text-faint text-[12.5px]">{r.id}</td>
+                      <td className="px-3 py-2.5">
+                        <span className={`text-[11.5px] font-bold rounded-md px-2 py-0.5 ${m.cls}`}>{m.label}</span>
+                      </td>
+                      <td className="px-3 py-2.5">{SCENARIO_LABEL[r.scenario] ?? r.scenario}</td>
+                      <td className="px-3 py-2.5">
+                        {r.inject !== 'none' ? (
+                          <span className="text-[11.5px] font-bold rounded-md px-2 py-0.5 bg-[#F9E9E2] text-[#B4552D]">{r.inject}</span>
+                        ) : (
+                          <span className="text-faint">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5 font-num">{r.steps}</td>
+                      <td className="px-3 py-2.5 font-num">{r.degradations > 0 ? <span className="text-[#8C6A1E] font-bold">⚠ {r.degradations}</span> : '—'}</td>
+                      <td className="px-3 py-2.5 font-num text-faint text-[12.5px] whitespace-nowrap">{fmtTime(r.createdAt)}</td>
+                      <td className="px-5 py-2.5 font-num text-faint text-[12.5px] whitespace-nowrap">{fmtTime(r.finishedAt)}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+        <div className="px-5 pb-4">
+          <Pager page={runPages.page} totalPages={runPages.totalPages} total={runPages.total} onPage={runPages.setPage} />
+        </div>
+      </div>
+
+      {/* 审计日志（全量） */}
+      <div className="card overflow-hidden">
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-line">
+          <span className="kicker !text-hwy !mb-0">AUDIT · 审计日志（全量）</span>
+          <span className="text-faint text-[12.5px]">{audit.length} 条记录</span>
+          <button
+            className="btn btn-ghost !py-1.5 !px-3.5 !text-[12.5px] ml-auto"
+            onClick={() =>
+              exportCsv(
+                `审计日志_全量_${new Date().toISOString().slice(0, 10)}.csv`,
+                ['时间', '角色', '动作', '详情', '运行ID'],
+                audit.map((e) => [fmtTime(e.at), AUDIT_ACTOR[e.actor]?.label ?? e.actor, e.action, e.detail ?? '', e.runId ?? '']),
+              )
+            }
+          >
+            导出 Excel
+          </button>
+        </div>
+        <div className="overflow-x-auto">
+          {audit.length === 0 ? (
+            <p className="text-sub text-[13.5px] px-5 py-6 text-center">暂无审计记录。</p>
+          ) : (
+            <table className="w-full text-[13.5px]">
+              <thead>
+                <tr className="text-left text-faint text-[12px] border-b border-line">
+                  <th className="px-5 py-2.5 font-semibold">时间</th>
+                  <th className="px-3 py-2.5 font-semibold">角色</th>
+                  <th className="px-3 py-2.5 font-semibold">动作</th>
+                  <th className="px-3 py-2.5 font-semibold">详情</th>
+                  <th className="px-5 py-2.5 font-semibold">运行 ID</th>
+                </tr>
+              </thead>
+              <tbody>
+                {auditPages.paged.map((e, i) => {
+                  const m = AUDIT_ACTOR[e.actor] ?? AUDIT_ACTOR.system
+                  return (
+                    <tr key={`${e.at}-${(auditPages.page - 1) * 10 + i}`} className="border-b border-line/60 hover:bg-white/60">
+                      <td className="px-5 py-2.5 font-num text-faint text-[12.5px] whitespace-nowrap">{fmtTime(e.at)}</td>
+                      <td className="px-3 py-2.5">
+                        <span className={`text-[11.5px] font-bold rounded-md px-2 py-0.5 ${m.cls}`}>{m.label}</span>
+                      </td>
+                      <td className="px-3 py-2.5 font-num font-semibold text-[13px] whitespace-nowrap">{e.action}</td>
+                      <td className="px-3 py-2.5 text-sub text-[13px] max-w-[380px] truncate" title={e.detail}>{e.detail ?? '—'}</td>
+                      <td className="px-5 py-2.5 font-num text-faint text-[12px]">{e.runId ?? '—'}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+        <div className="px-5 pb-4">
+          <Pager page={auditPages.page} totalPages={auditPages.totalPages} total={auditPages.total} onPage={auditPages.setPage} />
+        </div>
+      </div>
+
+      <p className="text-faint text-[12.5px] leading-[1.9] px-1">
+        车主侧「审计」页仅展示各表最新 100 条；此处直查数据库全量留痕，可翻阅更早的历史记录，支持导出 Excel。
+      </p>
+    </div>
+  )
+}
+
 /* ================= 主入口 ================= */
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'overview', label: '运营看板' },
   { key: 'users', label: '用户管理' },
   { key: 'cars', label: '车辆管理' },
+  { key: 'audit', label: '运行审计' },
 ]
 
 export default function Admin() {
@@ -672,6 +898,7 @@ export default function Admin() {
         {tab === 'overview' && <OverviewPanel />}
         {tab === 'users' && <UsersPanel />}
         {tab === 'cars' && <CarsPanel />}
+        {tab === 'audit' && <AdminAuditPanel />}
       </main>
 
       <footer className="max-w-[1200px] mx-auto px-5 pb-8 text-faint text-[12px]">

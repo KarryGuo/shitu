@@ -7,7 +7,9 @@ import type { RunDTO } from '@shitu/shared'
 /**
  * 运行审计（消费者证据页）：指标看板 + 工具健康 + 运行列表 + 审计日志。
  * 数据全部来自后端事实（/api/metrics · /api/runs · /api/audit），
- * 复赛「输出结果可追溯」的直接证据页。运行列表与审计日志支持分页浏览。
+ * 复赛「输出结果可追溯」的直接证据页。
+ * 三张数据表均分页浏览（每页 10 条）；消费者侧仅保留最新 100 条，
+ * 更早记录由管理后台「运行审计」全量查阅；支持导出 Excel。
  */
 
 /** 简易分页钩子：数据变化时自动收敛当前页 */
@@ -45,6 +47,34 @@ function Pager({ page, totalPages, total, unit, onPage }: { page: number; totalP
   )
 }
 
+/** 导出 Excel（CSV · UTF-8 BOM，Excel 直接打开不乱码） */
+function exportCsv(filename: string, headers: string[], rows: (string | number)[][]) {
+  const esc = (v: string | number) => {
+    const s = String(v ?? '')
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+  }
+  const csv = '\uFEFF' + [headers, ...rows].map((r) => r.map(esc).join(',')).join('\r\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(a.href)
+}
+
+/** 表头栏：标题 + 条数 + 导出按钮 */
+function TableBar({ title, total, onExport }: { title: string; total: number; onExport: () => void }) {
+  return (
+    <div className="flex items-center gap-3 px-5 py-3.5 border-b border-line">
+      <span className="text-[13px] font-bold tracking-[.06em] text-sub">{title}</span>
+      <span className="text-faint text-[12.5px] num">{total} 条记录</span>
+      <button className="btn btn-ghost !py-1.5 !px-3.5 !text-[12.5px] ml-auto" onClick={onExport}>
+        导出 Excel
+      </button>
+    </div>
+  )
+}
+
 const statusMeta: Record<string, { label: string; cls: string }> = {
   done: { label: '已完成', cls: 'bg-[#E3F1E6] text-[#2E7D46]' },
   waiting: { label: '待确认', cls: 'bg-[#F7EED8] text-[#8C6A1E]' },
@@ -61,6 +91,15 @@ const actorMeta: Record<string, { label: string; cls: string }> = {
   admin: { label: '管理员', cls: 'bg-[#EAE6DA] text-[#6B5B33]' },
 }
 
+const toolStatusMeta: Record<string, { label: string; cls: string }> = {
+  ok: { label: '正常', cls: 'bg-[#E3F1E6] text-[#2E7D46]' },
+  degraded: { label: '已降级', cls: 'bg-[#F7EED8] text-[#8C6A1E]' },
+  failed: { label: '失败', cls: 'bg-[#F9E9E2] text-[#B4552D]' },
+  running: { label: '调用中', cls: 'bg-[#E8EEF4] text-[#3A6B8C]' },
+}
+
+const scenarioMeta: Record<string, string> = { care: '保养', claim: '理赔', trip: '行程', trade: '换车' }
+
 const fmtTime = (iso: string) => {
   const d = new Date(iso)
   const p = (n: number) => String(n).padStart(2, '0')
@@ -75,7 +114,9 @@ export default function Audit() {
   const [error, setError] = useState<string | null>(null)
   const [updatedAt, setUpdatedAt] = useState<string>('')
 
-  /* 运行列表 / 审计日志分页（每页 10 条） */
+  /* 三表分页（每页 10 条；消费者侧各仅保留最新 100 条） */
+  const toolCalls = metrics?.toolCalls ?? []
+  const toolPages = usePaged(toolCalls, 10)
   const runPages = usePaged(runs, 10)
   const auditEntries = audit?.entries ?? []
   const auditPages = usePaged(auditEntries, 10)
@@ -99,12 +140,36 @@ export default function Audit() {
     return () => clearInterval(t)
   }, [refresh])
 
+  /* ---------- 导出 ---------- */
+  const exportTools = () =>
+    exportCsv(
+      `工具调用健康_${new Date().toISOString().slice(0, 10)}.csv`,
+      ['时间', '运行ID', '场景', '工具', '状态', '耗时(ms)', '备注'],
+      toolCalls.map((t) => [fmtTime(t.at), t.runId, scenarioMeta[t.scenario] ?? t.scenario, t.name, toolStatusMeta[t.status]?.label ?? t.status, t.latencyMs ?? '', t.note ?? '']),
+    )
+  const exportRuns = () =>
+    exportCsv(
+      `运行列表_${new Date().toISOString().slice(0, 10)}.csv`,
+      ['运行ID', '状态', '场景', '异常注入', '步数', '降级次数', '发起时间', '结束时间'],
+      runs.map((r) => [
+        r.id, statusMeta[r.status]?.label ?? r.status, scenarioMeta[r.scenario] ?? r.scenario,
+        r.inject === 'none' ? '' : r.inject, r.steps.length, r.degradations.length,
+        fmtTime(r.createdAt), r.finishedAt ? fmtTime(r.finishedAt) : '',
+      ]),
+    )
+  const exportAudit = () =>
+    exportCsv(
+      `审计日志_${new Date().toISOString().slice(0, 10)}.csv`,
+      ['时间', '角色', '动作', '详情', '运行ID'],
+      auditEntries.map((e) => [fmtTime(e.at), actorMeta[e.actor]?.label ?? e.actor, e.action, e.detail ?? '', e.runId ?? '']),
+    )
+
   return (
     <div ref={revealRef} className="pb-10">
       <SectionHead
         kicker="OPS · 运行审计"
         title="运行证据与指标看板"
-        sub="任务运行、工具调用、降级链路与审计日志的服务端事实聚合 —— 每 10 秒自动刷新，输出结果全程可追溯。"
+        sub="任务运行、工具调用、降级链路与审计日志的服务端事实聚合 —— 每 10 秒自动刷新，输出结果全程可追溯。三表均分页浏览（每页 10 条），支持导出 Excel。"
       />
 
       {error && (
@@ -138,40 +203,60 @@ export default function Audit() {
             <b>适配器状态：</b>
             LLM = <b>{metrics.providers.llm}</b>
             {metrics.providers.dashscopeKey ? '（DashScope Key 已配置）' : '（未配置 Key，走规则链路）'} · 地图 ={' '}
-            <b>{metrics.providers.amap === 'live' ? '高德实时' : '演示数据'}</b> · 存储 = <b>{metrics.providers.db}</b> · 审计条目{' '}
+            <b>{metrics.providers.amap === 'live' ? '高德实时' : '未接入'}</b> · 存储 = <b>{metrics.providers.db}</b> · 审计条目{' '}
             <b>{metrics.audit.total}</b> · 档案：车辆 {metrics.profile.cars} / 事件 {metrics.profile.events} / 预约{' '}
             {metrics.profile.bookings} / 待办提醒 {metrics.profile.remindersPending}
           </Note>
         </div>
       )}
 
-      {/* ===== 工具健康表 ===== */}
+      {/* ===== 工具健康表（逐次调用留痕） ===== */}
       <section className="mt-8">
         <SectionHead kicker="TOOLS · 工具调用健康" title="每次调用都有留痕" />
-        <div className="card overflow-x-auto reveal">
-          {metrics && metrics.tools.length > 0 ? (
-            <table className="plan-table">
-              <thead>
-                <tr>
-                  <th>工具</th>
-                  <th>调用次数</th>
-                  <th>降级</th>
-                  <th>失败</th>
-                  <th>平均耗时</th>
-                </tr>
-              </thead>
-              <tbody>
-                {metrics.tools.map((t) => (
-                  <tr key={t.name}>
-                    <td className="!text-left font-semibold">{t.name}</td>
-                    <td>{t.calls}</td>
-                    <td className={t.degraded ? 'text-[#8C6A1E] font-bold' : ''}>{t.degraded || '—'}</td>
-                    <td className={t.failed ? 'text-[#B4552D] font-bold' : ''}>{t.failed || '—'}</td>
-                    <td>{t.avgLatencyMs !== null ? `${t.avgLatencyMs} ms` : '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <div className="card overflow-hidden reveal">
+          {toolCalls.length > 0 ? (
+            <>
+              <TableBar title="逐次工具调用记录" total={toolCalls.length} onExport={exportTools} />
+              <div className="overflow-x-auto">
+                <table className="plan-table !mt-0">
+                  <thead>
+                    <tr>
+                      <th>时间</th>
+                      <th>运行 ID</th>
+                      <th>场景</th>
+                      <th>工具</th>
+                      <th>状态</th>
+                      <th>耗时</th>
+                      <th>备注</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {toolPages.paged.map((t, i) => {
+                      const m = toolStatusMeta[t.status] ?? toolStatusMeta.running
+                      return (
+                        <tr key={`${t.runId}-${t.at}-${t.name}-${i}`}>
+                          <td className="num text-faint text-[12.5px] whitespace-nowrap">{fmtTime(t.at)}</td>
+                          <td className="num text-faint text-[12.5px]">{t.runId}</td>
+                          <td>{scenarioMeta[t.scenario] ?? t.scenario}</td>
+                          <td className="!text-left font-semibold">{t.name}</td>
+                          <td>
+                            <span className={`text-[12px] font-bold rounded-md px-2 py-0.5 ${m.cls}`}>{m.label}</span>
+                          </td>
+                          <td className="num">{t.latencyMs !== null ? `${t.latencyMs} ms` : '—'}</td>
+                          <td className="text-sub text-[12.5px] max-w-[260px] truncate" title={t.note}>{t.note ?? '—'}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="px-5 pb-4">
+                <Pager page={toolPages.page} totalPages={toolPages.totalPages} total={toolPages.total} unit="" onPage={toolPages.setPage} />
+                <div className="text-faint text-[12px] text-center mt-2.5">
+                  消费者侧仅保留最新 100 条调用记录，更早记录可在管理后台「运行审计」查阅全量。
+                </div>
+              </div>
+            </>
           ) : (
             <div className="text-sub text-[14px] py-8 text-center">
               暂无工具调用记录 —— 去「保养」或「理赔」页发起一次任务闭环，工具调用数据将自动生成并留痕。
@@ -183,60 +268,116 @@ export default function Audit() {
       {/* ===== 运行列表 ===== */}
       <section className="mt-8">
         <SectionHead kicker="RUNS · 运行列表" title="每个任务的终态与降级记录" />
-        <div className="card p-4 md:p-5 reveal">
+        <div className="card overflow-hidden reveal">
           {runs.length === 0 ? (
             <div className="text-sub text-[14px] py-6 text-center">暂无运行记录 —— 去「保养」或「理赔」页发起一次任务闭环。</div>
           ) : (
-            <div className="flex flex-col">
-              {runPages.paged.map((r) => {
-                const m = statusMeta[r.status] ?? statusMeta.running
-                return (
-                  <div key={r.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 py-3 border-b border-line last:border-0">
-                    <span className="num text-faint text-[13px]">{r.id}</span>
-                    <span className={`text-[12px] font-bold rounded-md px-2 py-0.5 ${m.cls}`}>{m.label}</span>
-                    <b className="text-[14.5px]">场景 · {r.scenario}</b>
-                    {r.inject !== 'none' && (
-                      <span className="text-[12px] font-bold rounded-md px-2 py-0.5 bg-[#F9E9E2] text-[#B4552D]">异常注入 {r.inject}</span>
-                    )}
-                    <span className="num text-faint text-[13px]">{r.steps.length} 步</span>
-                    {r.degradations.length > 0 && (
-                      <span className="text-[12.5px] text-[#8C6A1E]" title={r.degradations.join('\n')}>
-                        ⚠ 降级 ×{r.degradations.length}
-                      </span>
-                    )}
-                    <span className="num text-faint text-[12.5px] ml-auto">{fmtTime(r.createdAt)}</span>
-                  </div>
-                )
-              })}
-            </div>
+            <>
+              <TableBar title="任务运行记录" total={runs.length} onExport={exportRuns} />
+              <div className="overflow-x-auto">
+                <table className="plan-table !mt-0">
+                  <thead>
+                    <tr>
+                      <th>运行 ID</th>
+                      <th>状态</th>
+                      <th>场景</th>
+                      <th>异常注入</th>
+                      <th>步数</th>
+                      <th>降级</th>
+                      <th>发起时间</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {runPages.paged.map((r) => {
+                      const m = statusMeta[r.status] ?? statusMeta.running
+                      return (
+                        <tr key={r.id}>
+                          <td className="num text-faint text-[12.5px]">{r.id}</td>
+                          <td>
+                            <span className={`text-[12px] font-bold rounded-md px-2 py-0.5 ${m.cls}`}>{m.label}</span>
+                          </td>
+                          <td>{scenarioMeta[r.scenario] ?? r.scenario}</td>
+                          <td>
+                            {r.inject !== 'none' ? (
+                              <span className="text-[12px] font-bold rounded-md px-2 py-0.5 bg-[#F9E9E2] text-[#B4552D]">{r.inject}</span>
+                            ) : (
+                              <span className="text-faint">—</span>
+                            )}
+                          </td>
+                          <td className="num">{r.steps.length}</td>
+                          <td>
+                            {r.degradations.length > 0 ? (
+                              <span className="text-[12.5px] text-[#8C6A1E] font-bold" title={r.degradations.join('\n')}>
+                                ⚠ ×{r.degradations.length}
+                              </span>
+                            ) : (
+                              <span className="text-faint">—</span>
+                            )}
+                          </td>
+                          <td className="num text-faint text-[12.5px] whitespace-nowrap">{fmtTime(r.createdAt)}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="px-5 pb-4">
+                <Pager page={runPages.page} totalPages={runPages.totalPages} total={runPages.total} unit="" onPage={runPages.setPage} />
+                <div className="text-faint text-[12px] text-center mt-2.5">
+                  消费者侧仅保留最新 100 条运行记录，更早记录可在管理后台「运行审计」查阅全量。
+                </div>
+              </div>
+            </>
           )}
-          <Pager page={runPages.page} totalPages={runPages.totalPages} total={runPages.total} unit="" onPage={runPages.setPage} />
         </div>
       </section>
 
       {/* ===== 审计日志 ===== */}
       <section className="mt-8">
         <SectionHead kicker="AUDIT · 审计日志" title="谁、在什么时候、做了什么" />
-        <div className="card p-4 md:p-5 reveal">
+        <div className="card overflow-hidden reveal">
           {auditEntries.length === 0 ? (
             <div className="text-sub text-[14px] py-6 text-center">暂无审计记录。</div>
           ) : (
-            <div className="flex flex-col">
-              {auditPages.paged.map((e, i) => {
-                const m = actorMeta[e.actor] ?? actorMeta.system
-                return (
-                  <div key={`${e.at}-${(auditPages.page - 1) * 10 + i}`} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 py-2 border-b border-line last:border-0">
-                    <span className="num text-faint text-[12.5px] w-[86px]">{fmtTime(e.at).slice(6)}</span>
-                    <span className={`text-[12px] font-bold rounded-md px-2 py-0.5 ${m.cls}`}>{m.label}</span>
-                    <span className="num text-[13.5px] font-semibold">{e.action}</span>
-                    {e.detail && <span className="text-sub text-[13px]">{e.detail}</span>}
-                    {e.runId && <span className="num text-faint text-[12px] ml-auto">{e.runId.slice(-8)}</span>}
-                  </div>
-                )
-              })}
-            </div>
+            <>
+              <TableBar title="审计日志记录" total={auditEntries.length} onExport={exportAudit} />
+              <div className="overflow-x-auto">
+                <table className="plan-table !mt-0">
+                  <thead>
+                    <tr>
+                      <th>时间</th>
+                      <th>角色</th>
+                      <th>动作</th>
+                      <th>详情</th>
+                      <th>运行 ID</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {auditPages.paged.map((e, i) => {
+                      const m = actorMeta[e.actor] ?? actorMeta.system
+                      return (
+                        <tr key={`${e.at}-${(auditPages.page - 1) * 10 + i}`}>
+                          <td className="num text-faint text-[12.5px] whitespace-nowrap">{fmtTime(e.at)}</td>
+                          <td>
+                            <span className={`text-[12px] font-bold rounded-md px-2 py-0.5 ${m.cls}`}>{m.label}</span>
+                          </td>
+                          <td className="num text-[13.5px] font-semibold whitespace-nowrap">{e.action}</td>
+                          <td className="text-sub text-[13px] max-w-[360px] truncate" title={e.detail}>{e.detail ?? '—'}</td>
+                          <td className="num text-faint text-[12px]">{e.runId ?? '—'}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="px-5 pb-4">
+                <Pager page={auditPages.page} totalPages={auditPages.totalPages} total={auditPages.total} unit="" onPage={auditPages.setPage} />
+                <div className="text-faint text-[12px] text-center mt-2.5">
+                  消费者侧仅保留最新 100 条审计记录，更早记录可在管理后台「运行审计」查阅全量。
+                </div>
+              </div>
+            </>
           )}
-          <Pager page={auditPages.page} totalPages={auditPages.totalPages} total={auditPages.total} unit="" onPage={auditPages.setPage} />
         </div>
       </section>
 
