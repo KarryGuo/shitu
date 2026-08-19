@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useApp } from '../stores/app'
 import { useReveal } from '../hooks/useReveal'
-import { SectionHead, DarkStat } from '../components/ui'
+import { SectionHead, DarkStat, NoCarGuard } from '../components/ui'
 import { Gauge, CarGlyph } from '../components/art'
 import { api, type NearbyResult } from '../api/client'
 
@@ -113,8 +113,12 @@ function NearbyCard() {
 export default function CarDetail() {
   const { id } = useParams()
   const cars = useApp((s) => s.cars)
-  const car = cars.find((c) => c.static.id === id) ?? cars[0]
   const revealRef = useReveal()
+
+  // 空车库守卫：无档案时引导建档（数据由车主自己录入，识途不预填）
+  if (cars.length === 0) return <NoCarGuard scene="查看车辆档案" />
+
+  const car = cars.find((c) => c.static.id === id) ?? cars[0]
 
   const s = car.static
   const st = car.state
