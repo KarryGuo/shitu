@@ -70,9 +70,19 @@ function SectionHead({
 
 /* ============================================================
    夜航国道 —— 俯瞰视角的夜路 Hero：
-   中央黄虚线向下流动，去程车渐行渐小，来车大灯迎面，
-   龙门架挂着「识途服务区」指路牌，路边立着已入档的里程石。
+   中央黄虚线向下流动，去程车（大灯照向远方）渐行渐小，来车大灯迎面，
+   龙门架挂着「识途服务区」指路牌；左侧乡野村落灯火，右侧夜色城市。
    ============================================================ */
+
+/* 右侧夜色城市楼群（天际线剪影）：x/w/y/h */
+const CITY_BUILDINGS = [
+  { x: 744, w: 36, y: 372, h: 290 },
+  { x: 790, w: 48, y: 292, h: 370 },
+  { x: 848, w: 30, y: 428, h: 232 },
+  { x: 886, w: 56, y: 236, h: 428 },
+  { x: 950, w: 40, y: 356, h: 300 },
+  { x: 996, w: 28, y: 442, h: 210 },
+]
 function AerialRoad() {
   return (
     <svg viewBox="0 0 1000 780" preserveAspectRatio="xMidYMid slice" className="absolute inset-0 w-full h-full" aria-hidden>
@@ -89,10 +99,14 @@ function AerialRoad() {
           <stop offset="0" stopColor="#f7d774" stopOpacity="0.3" />
           <stop offset="1" stopColor="#f7d774" stopOpacity="0" />
         </radialGradient>
-        <linearGradient id="hTrail" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#FFC72C" stopOpacity="0" />
-          <stop offset="1" stopColor="#FFC72C" stopOpacity="0.4" />
+        <linearGradient id="hConeUp" x1="0" y1="1" x2="0" y2="0">
+          <stop offset="0" stopColor="#fff8dc" stopOpacity="0.55" />
+          <stop offset="1" stopColor="#fff8dc" stopOpacity="0" />
         </linearGradient>
+        <radialGradient id="hCityGlow" cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0" stopColor="#f7d774" stopOpacity="0.16" />
+          <stop offset="1" stopColor="#f7d774" stopOpacity="0" />
+        </radialGradient>
         <linearGradient id="hCone" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#fff8dc" stopOpacity="0.55" />
           <stop offset="1" stopColor="#fff8dc" stopOpacity="0" />
@@ -115,16 +129,48 @@ function AerialRoad() {
         <path d="M0 680 Q 280 640 520 700 T 1000 660" />
       </g>
 
-      {/* 村落灯火 */}
+      {/* 村落灯火（左侧乡野 · 右上远山一点） */}
       {[
-        [110, 190], [170, 235], [92, 255], [856, 330], [905, 362],
-        [130, 585], [92, 620], [872, 600], [918, 648], [790, 120], [60, 380], [940, 470],
+        [110, 190], [170, 235], [92, 255], [130, 585], [92, 620], [60, 380], [790, 120],
       ].map(([x, y], i) => (
         <g key={i}>
           <circle cx={x} cy={y} r="18" fill="url(#hVillage)" />
           <circle cx={x} cy={y} r={i % 3 === 0 ? 2.8 : 2} fill="#f7d774" opacity="0.95" />
         </g>
       ))}
+
+      {/* 右侧：夜色城市 —— 国道通向的不夜城 */}
+      <g>
+        <ellipse cx="878" cy="458" rx="215" ry="175" fill="url(#hCityGlow)" />
+        {CITY_BUILDINGS.map((b, i) => (
+          <g key={i}>
+            <rect x={b.x} y={b.y} width={b.w} height={b.h} rx="3" fill="#141a21" stroke="#1c232b" strokeWidth="1" />
+            {/* 亮着的窗（暖光为主，零星冷光，少数呼吸明灭） */}
+            {Array.from({ length: Math.floor((b.h - 14) / 26) }).flatMap((_, r) =>
+              Array.from({ length: Math.max(1, Math.floor((b.w - 8) / 13)) }).map((_, c) => {
+                const seed = (r * 13 + c * 7 + i * 5) % 9
+                if (seed > 3) return null
+                return (
+                  <rect
+                    key={`${r}-${c}`}
+                    x={b.x + 6 + c * 13}
+                    y={b.y + 10 + r * 26}
+                    width="4.5"
+                    height="7"
+                    rx="0.8"
+                    fill={seed === 2 ? '#cfe0ee' : '#f7d774'}
+                    opacity={seed === 3 ? 0.9 : 0.55 + seed * 0.13}
+                    className={seed === 3 ? 'win-glow' : undefined}
+                  />
+                )
+              }),
+            )}
+          </g>
+        ))}
+        {/* 地标楼顶：天线 + 航空障碍灯 */}
+        <line x1="914" y1="238" x2="914" y2="208" stroke="#232a33" strokeWidth="2.5" />
+        <circle cx="914" cy="205" r="3" fill="#ff5a4e" className="avi-blink" />
+      </g>
 
       {/* 路基 · 路面 */}
       <polygon points="486,0 634,0 782,780 338,780" fill="#111419" />
@@ -139,11 +185,6 @@ function AerialRoad() {
       {/* 中央黄虚线：向前流动（黄光打底 + 实线） */}
       <line x1="560" y1="-20" x2="560" y2="800" stroke="#FFC72C" strokeWidth="20" opacity="0.16" filter="url(#hGlow)" />
       <line x1="560" y1="-20" x2="560" y2="800" stroke="#FFC72C" strokeWidth="13" strokeLinecap="butt" strokeDasharray="42 38" className="road-dash" />
-
-      {/* 车道光痕：去程车的大灯照出的光（与车同周期亮起、渐散） */}
-      <g className="car-trail">
-        <polygon points="612,340 638,340 646,780 586,780" fill="url(#hTrail)" />
-      </g>
 
       {/* 龙门架 + 指路牌 */}
       <g>
@@ -166,15 +207,21 @@ function AerialRoad() {
         <text x="32" y="41" textAnchor="middle" fontSize="8" fill="#5d646d" letterSpacing="1" fontFamily="'Noto Sans SC',sans-serif">都 · 入 · 档</text>
       </g>
 
-      {/* 去程车：驶向远方 */}
+      {/* 去程车：驶向远方，前大灯照亮前路 */}
       <g transform="translate(625,330)">
         <g className="car-away">
+          {/* 前大灯光锥：朝向远方（与来车同款，方向相反） */}
+          <polygon points="-13,-30 13,-30 30,-130 -30,-130" fill="url(#hConeUp)" className="beam" />
+          <ellipse cx="0" cy="-32" rx="15" ry="4.5" fill="#fff8dc" opacity="0.16" />
           <ellipse cx="0" cy="30" rx="13" ry="4" fill="#ff5a4e" opacity="0.18" />
           <rect x="-17" y="-32" width="34" height="64" rx="10" fill="#2c333c" stroke="#3a424d" strokeWidth="1.5" />
           <rect x="-13" y="-24" width="26" height="15" rx="4" fill="#151a20" />
           <rect x="-13" y="8" width="26" height="14" rx="4" fill="#151a20" />
           <rect x="-14" y="24" width="10" height="5" rx="2" fill="#ff5a4e" />
           <rect x="4" y="24" width="10" height="5" rx="2" fill="#ff5a4e" />
+          {/* 前大灯灯珠（车头） */}
+          <rect x="-14" y="-30" width="10" height="5" rx="2" fill="#fff8dc" />
+          <rect x="4" y="-30" width="10" height="5" rx="2" fill="#fff8dc" />
         </g>
       </g>
 

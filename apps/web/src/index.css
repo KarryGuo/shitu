@@ -626,31 +626,12 @@
   animation: driveToward 11s linear infinite;
   animation-delay: 3s;
 }
-/* 车道光痕：去程车的大灯光 —— 与 driveAway 同周期，车至光至、车远光散 */
-@keyframes trailFollow {
-  0% {
-    opacity: 0;
-    transform: translateY(26px);
-  }
-  12% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  78% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  94% {
-    opacity: 0;
-    transform: translateY(-22px);
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(-22px);
-  }
+/* 夜色城市：窗灯呼吸明灭 + 楼顶航空障碍灯闪烁 */
+.win-glow {
+  animation: dotBlink 6s ease-in-out infinite;
 }
-.car-trail {
-  animation: trailFollow 13s linear infinite;
+.avi-blink {
+  animation: dotBlink 2.4s ease-in-out infinite;
 }
 /* 下滑提示箭头 */
 @keyframes scrollHint {
