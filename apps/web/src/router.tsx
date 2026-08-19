@@ -1,5 +1,6 @@
-import { createBrowserRouter, Navigate } from 'react-router-dom'
+import { createBrowserRouter } from 'react-router-dom'
 import { AppShell } from './components/AppShell'
+import Home from './pages/Home'
 import Login from './pages/Login'
 import Cars from './pages/Cars'
 import CarDetail from './pages/CarDetail'
@@ -12,13 +13,12 @@ import Admin from './pages/Admin'
 
 export const router = createBrowserRouter(
   [
+    { path: '/', element: <Home /> },
     { path: '/login', element: <Login /> },
     { path: '/admin', element: <Admin /> },
     {
-      path: '/',
       element: <AppShell />,
       children: [
-        { index: true, element: <Navigate to="/cars" replace /> },
         { path: 'cars', element: <Cars /> },
         { path: 'cars/:id', element: <CarDetail /> },
         { path: 'care', element: <Care /> },

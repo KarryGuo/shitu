@@ -71,13 +71,16 @@ export function AppShell() {
       <header className="fixed top-0 inset-x-0 z-50 bg-asphalt border-b-2 border-mark/90">
         <div className="max-w-[1080px] mx-auto px-5 md:px-7 h-[60px] flex items-center gap-5">
           {/* 标志牌 Logo */}
-          <NavLink to="/cars" className="flex items-center gap-2.5 shrink-0">
+          <NavLink to="/" className="flex items-center gap-2.5 shrink-0">
             <span className="sign sign-sm !bg-hwy px-3 py-1 font-sign text-[19px] tracking-[.12em] leading-none flex items-center h-[34px]">
               识途
             </span>
             <span className="hidden lg:block font-num text-[13px] tracking-[.3em] text-white/40 font-semibold">SHITU</span>
           </NavLink>
           <nav className="hidden md:flex items-center gap-1.5 ml-4">
+            <NavLink to="/" className={({ isActive }) => `nav-link${isActive ? ' on' : ''}`}>
+              首页
+            </NavLink>
             {tabs.map((t) => (
               <NavLink key={t.to} to={t.to} className={({ isActive }) => `nav-link${isActive ? ' on' : ''}`}>
                 {t.label}
