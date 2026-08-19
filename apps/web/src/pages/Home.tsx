@@ -74,14 +74,16 @@ function SectionHead({
    龙门架挂着「识途服务区」指路牌；左侧乡野村落灯火，右侧夜色城市。
    ============================================================ */
 
-/* 右侧夜色城市楼群（天际线剪影）：x/w/y/h */
-const CITY_BUILDINGS = [
-  { x: 744, w: 36, y: 372, h: 290 },
-  { x: 790, w: 48, y: 292, h: 370 },
-  { x: 848, w: 30, y: 428, h: 232 },
-  { x: 886, w: 56, y: 236, h: 428 },
-  { x: 950, w: 40, y: 356, h: 300 },
-  { x: 996, w: 28, y: 442, h: 210 },
+/* 右侧远景小城：x/w/h/y（y 为楼脚基线）—— 贴地平线铺开的低层楼宇，离公路留出空地 */
+const CITY_BLOCKS = [
+  { x: 712, w: 26, h: 22, y: 186 },
+  { x: 748, w: 20, h: 17, y: 176 },
+  { x: 776, w: 30, h: 26, y: 190 },
+  { x: 814, w: 22, h: 19, y: 172 },
+  { x: 844, w: 34, h: 28, y: 184 },
+  { x: 886, w: 24, h: 20, y: 170 },
+  { x: 918, w: 30, h: 24, y: 186 },
+  { x: 954, w: 24, h: 18, y: 176 },
 ]
 function AerialRoad() {
   return (
@@ -129,9 +131,9 @@ function AerialRoad() {
         <path d="M0 680 Q 280 640 520 700 T 1000 660" />
       </g>
 
-      {/* 村落灯火（左侧乡野 · 右上远山一点） */}
+      {/* 村落灯火（左侧乡野） */}
       {[
-        [110, 190], [170, 235], [92, 255], [130, 585], [92, 620], [60, 380], [790, 120],
+        [110, 190], [170, 235], [92, 255], [130, 585], [92, 620], [60, 380],
       ].map(([x, y], i) => (
         <g key={i}>
           <circle cx={x} cy={y} r="18" fill="url(#hVillage)" />
@@ -139,37 +141,52 @@ function AerialRoad() {
         </g>
       ))}
 
-      {/* 右侧：夜色城市 —— 国道通向的不夜城 */}
+      {/* 右侧远景：夜色小城 —— 离公路留出空地，楼宇贴地平线、山墙面朝路侧 */}
       <g>
-        <ellipse cx="878" cy="458" rx="215" ry="175" fill="url(#hCityGlow)" />
-        {CITY_BUILDINGS.map((b, i) => (
-          <g key={i}>
-            <rect x={b.x} y={b.y} width={b.w} height={b.h} rx="3" fill="#141a21" stroke="#1c232b" strokeWidth="1" />
-            {/* 亮着的窗（暖光为主，零星冷光，少数呼吸明灭） */}
-            {Array.from({ length: Math.floor((b.h - 14) / 26) }).flatMap((_, r) =>
-              Array.from({ length: Math.max(1, Math.floor((b.w - 8) / 13)) }).map((_, c) => {
-                const seed = (r * 13 + c * 7 + i * 5) % 9
-                if (seed > 3) return null
-                return (
-                  <rect
-                    key={`${r}-${c}`}
-                    x={b.x + 6 + c * 13}
-                    y={b.y + 10 + r * 26}
-                    width="4.5"
-                    height="7"
-                    rx="0.8"
-                    fill={seed === 2 ? '#cfe0ee' : '#f7d774'}
-                    opacity={seed === 3 ? 0.9 : 0.55 + seed * 0.13}
-                    className={seed === 3 ? 'win-glow' : undefined}
-                  />
-                )
-              }),
-            )}
-          </g>
+        <ellipse cx="836" cy="178" rx="160" ry="60" fill="url(#hCityGlow)" />
+        {/* 远排剪影（更远、更矮、不亮窗） */}
+        {[
+          [718, 140, 16, 10], [754, 134, 14, 8], [802, 138, 18, 11],
+          [848, 132, 15, 9], [894, 140, 17, 10], [936, 134, 14, 8],
+        ].map(([x, y, w, h], i) => (
+          <rect key={`far-${i}`} x={x} y={y} width={w} height={h} rx="1" fill="#10151c" />
         ))}
-        {/* 地标楼顶：天线 + 航空障碍灯 */}
-        <line x1="914" y1="238" x2="914" y2="208" stroke="#232a33" strokeWidth="2.5" />
-        <circle cx="914" cy="205" r="3" fill="#ff5a4e" className="avi-blink" />
+        {/* 近排：低层楼宇（屋顶 + 朝路山墙面 + 亮窗正面，透视朝向路尽头） */}
+        {CITY_BLOCKS.map((b, i) => {
+          const yt = b.y - b.h
+          const dx = -6 // 朝灭点（路尽头）收进：山墙面朝向马路一侧
+          const dy = -5
+          return (
+            <g key={i}>
+              {/* 朝路侧的山墙面（暗面） */}
+              <polygon points={`${b.x},${yt} ${b.x},${yt + b.h} ${b.x + dx},${yt + b.h + dy} ${b.x + dx},${yt + dy}`} fill="#0f141b" />
+              {/* 屋顶面 */}
+              <polygon points={`${b.x},${yt} ${b.x + b.w},${yt} ${b.x + b.w + dx},${yt + dy} ${b.x + dx},${yt + dy}`} fill="#1b222b" />
+              {/* 正面 */}
+              <rect x={b.x} y={yt} width={b.w} height={b.h} rx="1.5" fill="#151b23" stroke="#1d242d" strokeWidth="0.8" />
+              {/* 亮着的窗（暖光为主，零星冷光，少数呼吸明灭） */}
+              {Array.from({ length: Math.max(1, Math.floor((b.h - 7) / 9)) }).flatMap((_, r) =>
+                Array.from({ length: Math.max(1, Math.floor((b.w - 6) / 8)) }).map((_, c) => {
+                  const seed = (r * 5 + c * 3 + i * 7) % 9
+                  if (seed > 3) return null
+                  return (
+                    <rect
+                      key={`${r}-${c}`}
+                      x={b.x + 4 + c * 8}
+                      y={yt + 4 + r * 9}
+                      width="3"
+                      height="4"
+                      rx="0.6"
+                      fill={seed === 2 ? '#cfe0ee' : '#f7d774'}
+                      opacity={seed === 3 ? 0.9 : 0.55 + seed * 0.13}
+                      className={seed === 3 ? 'win-glow' : undefined}
+                    />
+                  )
+                }),
+              )}
+            </g>
+          )
+        })}
       </g>
 
       {/* 路基 · 路面 */}
