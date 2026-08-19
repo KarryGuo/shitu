@@ -52,6 +52,21 @@ export const api = {
     req<RunDTO>(`/runs/${id}/confirm`, { method: 'POST', body: JSON.stringify({ decision, token }) }),
   getProfile: () => req<ProfileDTO>('/profile'),
   resetProfile: () => req<ProfileDTO>('/profile/reset', { method: 'POST' }),
+  /** 车主建档：录入自己的车（成为后端档案主车，任务闭环/问识途基于它工作） */
+  addCar: (body: {
+    id: string
+    plateNo: string
+    brand: string
+    model: string
+    year: number
+    fuelType: string
+    purchaseDate: string
+    mileage: number
+    mileageAt: string
+    insuranceExpiry: string
+    inspectionExpiry: string
+    lastMaintenanceMileage?: number
+  }) => req<ProfileDTO>('/profile/cars', { method: 'POST', body: JSON.stringify(body) }),
   getNearby: (kind: 'charging' | 'gas' | 'wash') =>
     req<NearbyResult>(`/tools/nearby?kind=${kind}`),
   getMetrics: () => req<Metrics>('/metrics'),

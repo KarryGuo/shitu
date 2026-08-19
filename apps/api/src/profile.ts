@@ -74,6 +74,74 @@ export function getCar(carId: string): Car {
   return car
 }
 
+/** 主车：任务闭环（care/claim/ask）始终作用于档案中的第一辆车 */
+export function getMainCar(): Car {
+  const car = mutate((s) => s.profile.cars[0])
+  if (!car) throw new Error('CAR_NOT_FOUND:main')
+  return car
+}
+
+/** 车主自建档案：POST /api/profile/cars 的落库目标 */
+export interface CarInput {
+  id: string
+  plateNo: string
+  brand: string
+  model: string
+  year: number
+  fuelType: string
+  purchaseDate: string
+  mileage: number
+  mileageAt: string
+  insuranceExpiry: string
+  inspectionExpiry: string
+  lastMaintenanceMileage?: number
+}
+
+/** 车主建档：把车主录入的车设为档案主车，并按到期日重建基础提醒 */
+export function setActiveCar(input: CarInput) {
+  return mutate((s) => {
+    const car: Car = {
+      static: {
+        id: input.id, plateNo: input.plateNo, brand: input.brand, model: input.model,
+        year: input.year, fuelType: input.fuelType, purchaseDate: input.purchaseDate,
+      },
+      state: {
+        mileage: input.mileage,
+        mileageAt: input.mileageAt,
+        insuranceExpiry: input.insuranceExpiry,
+        inspectionExpiry: input.inspectionExpiry,
+        lastMaintenanceAt: undefined,
+        lastMaintenanceMileage: input.lastMaintenanceMileage ?? input.mileage,
+      },
+      events: [],
+    }
+    // 保养周期：本周期已行驶 ≥7,000 km 视为临近/到期，立即提醒；否则 12 个月后提醒
+    const cycleUsed = car.state.mileage - car.state.lastMaintenanceMileage!
+    const careDue = cycleUsed >= 7000 ? input.mileageAt : addMonths(input.mileageAt, 12)
+    const reminders: Reminder[] = [
+      { id: uid('r'), carId: input.id, kind: 'insurance', title: '保险到期', dueAt: input.insuranceExpiry, status: 'pending' },
+      { id: uid('r'), carId: input.id, kind: 'inspection', title: '年检到期', dueAt: input.inspectionExpiry, status: 'pending' },
+      {
+        id: uid('r'), carId: input.id, kind: 'maintenance',
+        title: cycleUsed >= 7000 ? `常规保养 · 手册周期${cycleUsed >= 10000 ? '已到' : '临近'}` : '常规保养 · 满 12 个月',
+        dueAt: careDue, status: 'pending',
+      },
+    ]
+    s.profile = { cars: [car], reminders, bookings: [] }
+    s.audit.push({
+      at: nowIso(), actor: 'user', action: 'profile.car.create',
+      detail: `车主建档：${input.plateNo}（${input.brand} ${input.model}）· ${input.mileage.toLocaleString()} km`,
+    })
+    return s.profile
+  })
+}
+
+function addMonths(dateIso: string, months: number): string {
+  const d = new Date(`${dateIso}T00:00:00Z`)
+  d.setUTCMonth(d.getUTCMonth() + months)
+  return d.toISOString().slice(0, 10)
+}
+
 /** 档案回写：事件域追加（任务闭环最后一步） */
 export function addEvent(carId: string, e: Omit<CarEvent, 'id' | 'carId'>): CarEvent {
   return mutate((s) => {
@@ -95,6 +163,14 @@ export function addBooking(b: Omit<Booking, 'id'>): Booking {
 export function markReminderDone(id: string) {
   mutate((s) => {
     const r = s.profile.reminders.find((x) => x.id === id)
+    if (r) r.status = 'done'
+  })
+}
+
+/** 保养任务完成后：标记主车第一项未完成的保养提醒 */
+export function completeCareReminder(carId: string) {
+  mutate((s) => {
+    const r = s.profile.reminders.find((x) => x.carId === carId && x.kind === 'maintenance' && x.status !== 'done')
     if (r) r.status = 'done'
   })
 }

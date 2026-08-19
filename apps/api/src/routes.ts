@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { ErrorCodes } from '@shitu/shared'
 import { getState, mutate, loadState } from './store.js'
-import { getProfile, resetProfile, seedProfile } from './profile.js'
+import { getProfile, resetProfile, seedProfile, setActiveCar } from './profile.js'
 import { createCareRun, createClaimRun, chooseClaim, getRun, decideRun } from './orchestrator.js'
 import { nearbySearch, type NearbyKind } from './amap.js'
 import { askAgent } from './ask.js'
@@ -86,6 +86,29 @@ export async function registerRoutes(app: FastifyInstance) {
 
   app.post('/api/profile/reset', async () => {
     resetProfile()
+    return getProfile()
+  })
+
+  /* 车主建档：录入自己的车（覆盖演示样例，成为档案主车） */
+  const CarCreateSchema = z.object({
+    id: z.string().min(1).max(64),
+    plateNo: z.string().min(1).max(16),
+    brand: z.string().min(1).max(40),
+    model: z.string().min(1).max(60),
+    year: z.coerce.number().int().min(1980).max(2100),
+    fuelType: z.string().min(1).max(10),
+    purchaseDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    mileage: z.coerce.number().int().min(0).max(2_000_000),
+    mileageAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    insuranceExpiry: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    inspectionExpiry: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    lastMaintenanceMileage: z.coerce.number().int().min(0).max(2_000_000).optional(),
+  })
+
+  app.post('/api/profile/cars', async (req, reply) => {
+    const parsed = CarCreateSchema.safeParse(req.body ?? {})
+    if (!parsed.success) return reply.status(400).send(err('INVALID_BODY', '车辆信息不完整或格式有误'))
+    setActiveCar(parsed.data)
     return getProfile()
   })
 
