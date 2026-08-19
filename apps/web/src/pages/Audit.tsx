@@ -23,6 +23,7 @@ const actorMeta: Record<string, { label: string; cls: string }> = {
   agent: { label: 'Agent', cls: 'bg-hwy-tint text-hwy-deep' },
   user: { label: '车主', cls: 'bg-[#E8EEF4] text-[#3A6B8C]' },
   system: { label: '系统', cls: 'bg-concrete-2 text-sub' },
+  admin: { label: '管理员', cls: 'bg-[#EAE6DA] text-[#6B5B33]' },
 }
 
 const fmtTime = (iso: string) => {
@@ -63,8 +64,12 @@ export default function Audit() {
       <SectionHead
         kicker="OPS · 运行审计"
         title="运行证据与指标看板"
-        sub="任务运行、工具调用、降级链路与审计日志的服务端事实聚合 —— 每 10 秒自动刷新，输出结果全程可追溯。"
+        sub="任务运行、工具调用、降级链路与审计日志的服务端事实聚合 —— 每 10 秒自动刷新，输出结果全程可追溯。管理入口见右上方。"
       />
+
+      <div className="flex justify-end -mt-2 mb-3">
+        <a href="#/admin" className="text-[13px] font-bold text-hwy hover:underline">管理后台（用户/车辆/运营看板） →</a>
+      </div>
 
       {error && (
         <div className="card p-5 mb-5 border-[#F9E9E2]">

@@ -190,10 +190,10 @@ export interface ProfileDTO {
   bookings: Booking[]
 }
 
-/** 审计日志条目（运行证据） */
+/** 审计日志条目（运行证据；admin = 管理后台操作） */
 export interface AuditEntry {
   at: string
-  actor: 'agent' | 'user' | 'system'
+  actor: 'agent' | 'user' | 'system' | 'admin'
   action: string
   detail?: string
   runId?: string

@@ -8,10 +8,12 @@ import Claim from './pages/Claim'
 import Bookings from './pages/Bookings'
 import Settings from './pages/Settings'
 import Audit from './pages/Audit'
+import Admin from './pages/Admin'
 
 export const router = createBrowserRouter(
   [
     { path: '/login', element: <Login /> },
+    { path: '/admin', element: <Admin /> },
     {
       path: '/',
       element: <AppShell />,

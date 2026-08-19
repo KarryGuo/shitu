@@ -81,6 +81,15 @@ CREATE TABLE IF NOT EXISTS audit_log (
   run_id TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_audit_run ON audit_log(run_id);
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'user',
+  status TEXT NOT NULL DEFAULT 'active',
+  created_at TEXT NOT NULL,
+  last_login_at TEXT
+);
 `
 
 let client: Client | null = null
@@ -185,6 +194,16 @@ export interface BookingRow {
   idempotency_key: string | null
 }
 
+export interface UserRow {
+  id: string
+  email: string
+  name: string
+  role: string
+  status: string
+  created_at: string
+  last_login_at: string | null
+}
+
 /* ---------- 读取 ---------- */
 
 export async function loadRunRows(limit = 50): Promise<RunRow[]> {
@@ -218,6 +237,35 @@ export async function loadProfileRows() {
     reminders: reminders.rows as unknown as ReminderRow[],
     bookings: bookings.rows as unknown as BookingRow[],
   }
+}
+
+/* ---------- 用户域（管理后台）：独立于档案内存态，直接 DB 读写 ---------- */
+
+export async function loadUserRows(): Promise<UserRow[]> {
+  const rs = await getDb().execute('SELECT * FROM users ORDER BY created_at ASC')
+  return rs.rows as unknown as UserRow[]
+}
+
+export async function upsertUserRow(u: UserRow): Promise<void> {
+  await getDb().execute({
+    sql: `INSERT INTO users (id, email, name, role, status, created_at, last_login_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET email=excluded.email, name=excluded.name,
+        role=excluded.role, status=excluded.status, last_login_at=excluded.last_login_at`,
+    args: [u.id, u.email, u.name, u.role, u.status, u.created_at, u.last_login_at] as InValue[],
+  })
+}
+
+export async function deleteUserRow(id: string): Promise<void> {
+  await getDb().execute({ sql: 'DELETE FROM users WHERE id = ?', args: [id] })
+}
+
+/** 各用户名下车辆数（管理后台用户列表列） */
+export async function countCarsByUser(): Promise<Record<string, number>> {
+  const rs = await getDb().execute('SELECT user_id, COUNT(*) AS n FROM cars GROUP BY user_id')
+  const out: Record<string, number> = {}
+  for (const row of rs.rows as unknown as { user_id: string; n: number }[]) out[row.user_id] = row.n
+  return out
 }
 
 /* ---------- 写入 ---------- */

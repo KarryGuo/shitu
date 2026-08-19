@@ -6,6 +6,7 @@ import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import fastifyStatic from '@fastify/static'
 import { initState, registerRoutes } from './routes.js'
+import { registerAdminRoutes } from './admin.js'
 import { getState } from './store.js'
 
 const app = Fastify({ logger: true })
@@ -15,6 +16,7 @@ await app.register(cors, { origin: WEB_ORIGIN.split(',').map((s) => s.trim()) })
 
 await initState()
 await registerRoutes(app)
+await registerAdminRoutes(app)
 
 /** 健康检查（render.yaml healthCheckPath） */
 app.get('/healthz', async () => ({ ok: true, svc: 'shitu-api', ts: new Date().toISOString() }))

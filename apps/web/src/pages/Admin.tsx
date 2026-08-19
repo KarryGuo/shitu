@@ -1,0 +1,484 @@
+import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { adminApi, type AdminOverview, type AdminUser, type AdminCar } from '../api/client'
+
+/**
+ * 管理后台（独立于车主端 AppShell）：
+ * 口令登录 → 运营看板 / 用户管理 / 车辆管理 三面板。
+ * 所有管理写操作在后端入审计（actor=admin），与车主侧同一本账。
+ */
+
+type Tab = 'overview' | 'users' | 'cars'
+
+/* ================= 登录门 ================= */
+
+function LoginGate({ onOk }: { onOk: () => void }) {
+  const [token, setToken] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const submit = async () => {
+    if (!token.trim() || busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      await adminApi.login(token.trim())
+      onOk()
+    } catch {
+      setError('口令无效，请重试')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-[#101419] px-6">
+      <div className="w-full max-w-[400px] bg-paper rounded-[16px] shadow-2xl overflow-hidden anim-up">
+        <div className="zebra-soft" />
+        <div className="p-7">
+          <div className="flex items-center gap-2.5">
+            <span className="sign sign-sm !rounded-[8px] px-3 py-1 font-sign text-[15px] tracking-[.1em] h-[30px] flex items-center">识途 · 管理后台</span>
+          </div>
+          <h1 className="font-display text-[24px] mt-4">管理员登录</h1>
+          <p className="text-sub text-[13.5px] mt-1.5 mb-6 leading-[1.9]">
+            输入管理口令进入。未配置 ADMIN_TOKEN 时默认口令为 <b className="num">shitu-admin</b>。
+          </p>
+          <form
+            className="flex flex-col gap-4"
+            onSubmit={(e) => {
+              e.preventDefault()
+              void submit()
+            }}
+          >
+            <div>
+              <label className="field-label">管理口令</label>
+              <input
+                className="field"
+                type="password"
+                placeholder="••••••••"
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+                autoFocus
+              />
+            </div>
+            {error && <div className="text-[13px] text-[#A0522D] font-bold">{error}</div>}
+            <button className="btn btn-ink w-full !py-3" disabled={!token.trim() || busy}>
+              {busy ? <span className="thinking"><span /><span /><span /></span> : '进入管理后台'}
+            </button>
+          </form>
+          <Link to="/cars" className="block text-center text-faint text-[13px] mt-5 hover:text-sub">
+            ← 返回车主端
+          </Link>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ================= 运营看板 ================= */
+
+function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="bg-white rounded-[12px] border border-line px-5 py-4">
+      <div className="text-faint text-[12.5px] tracking-[.04em]">{label}</div>
+      <div className="font-num font-bold text-[26px] mt-1 leading-none">{value}</div>
+      {sub && <div className="text-sub text-[12.5px] mt-1.5">{sub}</div>}
+    </div>
+  )
+}
+
+function OverviewPanel() {
+  const [data, setData] = useState<AdminOverview | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = () => adminApi.overview().then(setData).catch((e: Error) => setError(e.message))
+
+  useEffect(() => {
+    void load()
+    const t = setInterval(() => void load(), 15000)
+    return () => clearInterval(t)
+  }, [])
+
+  if (error) return <div className="card p-6 text-[#A0522D] font-bold">加载失败：{error}</div>
+  if (!data) return <div className="card p-6 text-sub">看板加载中…</div>
+
+  const maxRuns = Math.max(1, ...data.trend.map((d) => d.runs))
+
+  return (
+    <div className="flex flex-col gap-5">
+      {/* 指标卡 */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
+        <StatCard label="用户总数" value={String(data.users.total)} sub={`活跃 ${data.users.active} · 禁用 ${data.users.disabled}`} />
+        <StatCard label="车辆档案" value={String(data.cars.total)} sub={`事件 ${data.cars.events} · 预约 ${data.cars.bookings}`} />
+        <StatCard label="任务运行" value={String(data.runs.total)} sub={`care ${data.runs.byScenario.care ?? 0} · claim ${data.runs.byScenario.claim ?? 0}`} />
+        <StatCard
+          label="闭环成功率"
+          value={data.runs.successRate === null ? '—' : `${data.runs.successRate}%`}
+          sub={`完成 ${data.runs.byStatus.done ?? 0} · 取消 ${data.runs.byStatus.cancelled ?? 0}`}
+        />
+        <StatCard label="降级运行" value={String(data.runs.degradedRuns)} sub="链路未中断" />
+        <StatCard
+          label="LLM 调用"
+          value={String(data.llm.total)}
+          sub={data.llm.keyConfigured ? `${data.llm.provider} · 降级 ${data.llm.degraded}` : '未配置 Key（规则链路）'}
+        />
+      </div>
+
+      {/* 近 7 日趋势 */}
+      <div className="card p-6">
+        <div className="kicker !text-hwy">TREND · 近 7 日任务运行</div>
+        <div className="flex items-end gap-2.5 mt-5 h-[120px]">
+          {data.trend.map((d) => (
+            <div key={d.date} className="flex-1 flex flex-col items-center gap-1.5 group">
+              <div className="text-[11px] font-num text-faint opacity-0 group-hover:opacity-100 transition-opacity">{d.runs}</div>
+              <div
+                className="w-full rounded-t-[4px] bg-hwy/85 hover:bg-hwy transition-colors relative"
+                style={{ height: `${Math.max(4, (d.runs / maxRuns) * 88)}px` }}
+              >
+                {d.degraded > 0 && <div className="absolute inset-x-0 top-0 h-[3px] bg-mark rounded-t-[4px]" />}
+              </div>
+              <div className="text-[10.5px] font-num text-faint">{d.date.slice(5)}</div>
+            </div>
+          ))}
+        </div>
+        <div className="flex gap-5 mt-4 text-[12px] text-sub">
+          <span className="flex items-center gap-1.5"><span className="w-3 h-[3px] bg-hwy rounded" />运行数</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-[3px] bg-mark rounded" />含降级</span>
+          <span className="text-faint ml-auto">审计条目 {data.auditTotal} · 更新于 {data.at.slice(11, 19)}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ================= 用户管理 ================= */
+
+function UsersPanel() {
+  const [users, setUsers] = useState<AdminUser[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [showCreate, setShowCreate] = useState(false)
+  const [form, setForm] = useState({ email: '', name: '', role: 'user' as 'user' | 'admin' })
+  const [busy, setBusy] = useState(false)
+
+  const load = () => adminApi.listUsers().then((r) => setUsers(r.users)).catch((e: Error) => setError(e.message))
+  useEffect(() => {
+    void load()
+  }, [])
+
+  const create = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      await adminApi.createUser(form)
+      setForm({ email: '', name: '', role: 'user' })
+      setShowCreate(false)
+      await load()
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const patch = async (id: string, body: Parameters<typeof adminApi.updateUser>[1]) => {
+    setError(null)
+    try {
+      await adminApi.updateUser(id, body)
+      await load()
+    } catch (e) {
+      setError((e as Error).message)
+    }
+  }
+
+  const remove = async (u: AdminUser) => {
+    if (!confirm(`确认删除用户 ${u.email}？`)) return
+    setError(null)
+    try {
+      await adminApi.deleteUser(u.id)
+      await load()
+    } catch (e) {
+      setError((e as Error).message)
+    }
+  }
+
+  if (!users) return <div className="card p-6 text-sub">用户列表加载中…</div>
+
+  return (
+    <div className="card overflow-hidden">
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-line">
+        <span className="kicker !text-hwy !mb-0">USERS · 用户管理</span>
+        <span className="text-faint text-[12.5px]">{users.length} 个账户</span>
+        <button className="btn btn-bronze !py-1.5 !px-4 !text-[13px] ml-auto" onClick={() => setShowCreate((v) => !v)}>
+          {showCreate ? '收起' : '+ 创建用户'}
+        </button>
+      </div>
+
+      {error && <div className="px-5 py-2.5 text-[13px] text-[#A0522D] font-bold bg-[#F9E9E2]">{error}</div>}
+
+      {showCreate && (
+        <form
+          className="flex flex-wrap gap-2.5 px-5 py-4 border-b border-line bg-paper"
+          onSubmit={(e) => {
+            e.preventDefault()
+            void create()
+          }}
+        >
+          <input className="field !w-[220px]" type="email" placeholder="邮箱" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
+          <input className="field !w-[160px]" placeholder="姓名" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required maxLength={40} />
+          <select className="field !w-[120px]" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as 'user' | 'admin' })}>
+            <option value="user">车主</option>
+            <option value="admin">管理员</option>
+          </select>
+          <button className="btn btn-ink !py-2 !px-5 !text-[13.5px]" disabled={busy || !form.email || !form.name}>
+            创建
+          </button>
+        </form>
+      )}
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-[13.5px]">
+          <thead>
+            <tr className="text-left text-faint text-[12px] border-b border-line">
+              <th className="px-5 py-2.5 font-semibold">邮箱</th>
+              <th className="px-3 py-2.5 font-semibold">姓名</th>
+              <th className="px-3 py-2.5 font-semibold">角色</th>
+              <th className="px-3 py-2.5 font-semibold">状态</th>
+              <th className="px-3 py-2.5 font-semibold">车辆</th>
+              <th className="px-3 py-2.5 font-semibold">注册时间</th>
+              <th className="px-5 py-2.5 font-semibold text-right">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.map((u) => (
+              <tr key={u.id} className="border-b border-line/60 hover:bg-white/60">
+                <td className="px-5 py-2.5 font-semibold">{u.email}</td>
+                <td className="px-3 py-2.5">{u.name}</td>
+                <td className="px-3 py-2.5">
+                  <span className={`text-[11.5px] font-bold rounded-md px-2 py-0.5 ${u.role === 'admin' ? 'bg-[#EAE6DA] text-[#6B5B33]' : 'bg-hwy-tint text-hwy-deep'}`}>
+                    {u.role === 'admin' ? '管理员' : '车主'}
+                  </span>
+                </td>
+                <td className="px-3 py-2.5">
+                  <span className={`text-[11.5px] font-bold rounded-md px-2 py-0.5 ${u.status === 'active' ? 'bg-[#E4EEE2] text-[#3F6B3A]' : 'bg-[#F9E9E2] text-[#B4552D]'}`}>
+                    {u.status === 'active' ? '活跃' : '已禁用'}
+                  </span>
+                </td>
+                <td className="px-3 py-2.5 font-num">{u.cars}</td>
+                <td className="px-3 py-2.5 font-num text-faint">{u.created_at.slice(0, 10)}</td>
+                <td className="px-5 py-2.5 text-right whitespace-nowrap">
+                  <button className="text-[12.5px] font-bold text-hwy hover:underline mr-3" onClick={() => void patch(u.id, { status: u.status === 'active' ? 'disabled' : 'active' })}>
+                    {u.status === 'active' ? '禁用' : '启用'}
+                  </button>
+                  <button className="text-[12.5px] font-bold text-sub hover:underline mr-3" onClick={() => void patch(u.id, { role: u.role === 'admin' ? 'user' : 'admin' })}>
+                    {u.role === 'admin' ? '降为车主' : '设为管理员'}
+                  </button>
+                  <button className="text-[12.5px] font-bold text-[#A0522D] hover:underline" onClick={() => void remove(u)}>
+                    删除
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+/* ================= 车辆管理 ================= */
+
+function CarsPanel() {
+  const [cars, setCars] = useState<AdminCar[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [editing, setEditing] = useState<AdminCar | null>(null)
+  const [form, setForm] = useState({ mileage: '', insuranceExpiry: '', inspectionExpiry: '' })
+  const [busy, setBusy] = useState(false)
+
+  const load = () => adminApi.listCars().then((r) => setCars(r.cars)).catch((e: Error) => setError(e.message))
+  useEffect(() => {
+    void load()
+  }, [])
+
+  const openEdit = (c: AdminCar) => {
+    setEditing(c)
+    setForm({ mileage: String(c.mileage), insuranceExpiry: c.insuranceExpiry, inspectionExpiry: c.inspectionExpiry })
+  }
+
+  const save = async () => {
+    if (!editing || busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      await adminApi.updateCar(editing.id, {
+        mileage: Number(form.mileage) || 0,
+        insuranceExpiry: form.insuranceExpiry,
+        inspectionExpiry: form.inspectionExpiry,
+      })
+      setEditing(null)
+      await load()
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const remove = async (c: AdminCar) => {
+    if (!confirm(`确认删除车辆 ${c.plateNo}？将级联清理其提醒与预约。`)) return
+    setError(null)
+    try {
+      await adminApi.deleteCar(c.id)
+      await load()
+    } catch (e) {
+      setError((e as Error).message)
+    }
+  }
+
+  if (!cars) return <div className="card p-6 text-sub">车辆列表加载中…</div>
+
+  return (
+    <div className="card overflow-hidden">
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-line">
+        <span className="kicker !text-hwy !mb-0">CARS · 车辆管理</span>
+        <span className="text-faint text-[12.5px]">{cars.length} 辆在档</span>
+        <span className="text-faint text-[12px] ml-auto">编辑走 store 写透：内存态与数据库同步</span>
+      </div>
+
+      {error && <div className="px-5 py-2.5 text-[13px] text-[#A0522D] font-bold bg-[#F9E9E2]">{error}</div>}
+
+      {editing && (
+        <form
+          className="flex flex-wrap items-end gap-2.5 px-5 py-4 border-b border-line bg-paper"
+          onSubmit={(e) => {
+            e.preventDefault()
+            void save()
+          }}
+        >
+          <div>
+            <label className="field-label">车牌</label>
+            <div className="font-bold text-[14px] py-2">{editing.plateNo}</div>
+          </div>
+          <div>
+            <label className="field-label">里程（km）</label>
+            <input className="field !w-[130px] font-num" type="number" min={0} value={form.mileage} onChange={(e) => setForm({ ...form, mileage: e.target.value })} />
+          </div>
+          <div>
+            <label className="field-label">保险到期</label>
+            <input className="field !w-[150px] font-num" type="date" value={form.insuranceExpiry} onChange={(e) => setForm({ ...form, insuranceExpiry: e.target.value })} />
+          </div>
+          <div>
+            <label className="field-label">年检到期</label>
+            <input className="field !w-[150px] font-num" type="date" value={form.inspectionExpiry} onChange={(e) => setForm({ ...form, inspectionExpiry: e.target.value })} />
+          </div>
+          <button className="btn btn-ink !py-2 !px-5 !text-[13.5px]" disabled={busy}>保存</button>
+          <button type="button" className="btn btn-ghost !py-2 !px-4 !text-[13.5px]" onClick={() => setEditing(null)}>取消</button>
+        </form>
+      )}
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-[13.5px]">
+          <thead>
+            <tr className="text-left text-faint text-[12px] border-b border-line">
+              <th className="px-5 py-2.5 font-semibold">车牌</th>
+              <th className="px-3 py-2.5 font-semibold">车型</th>
+              <th className="px-3 py-2.5 font-semibold">车主</th>
+              <th className="px-3 py-2.5 font-semibold">里程</th>
+              <th className="px-3 py-2.5 font-semibold">保险到期</th>
+              <th className="px-3 py-2.5 font-semibold">年检到期</th>
+              <th className="px-3 py-2.5 font-semibold">档案事件</th>
+              <th className="px-5 py-2.5 font-semibold text-right">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {cars.map((c) => (
+              <tr key={c.id} className="border-b border-line/60 hover:bg-white/60">
+                <td className="px-5 py-2.5 font-bold">{c.plateNo}</td>
+                <td className="px-3 py-2.5">{c.brand} {c.model}（{c.year}）</td>
+                <td className="px-3 py-2.5">{c.owner}</td>
+                <td className="px-3 py-2.5 font-num">{c.mileage.toLocaleString()} km</td>
+                <td className="px-3 py-2.5 font-num">{c.insuranceExpiry}</td>
+                <td className="px-3 py-2.5 font-num">{c.inspectionExpiry}</td>
+                <td className="px-3 py-2.5 font-num">{c.events}</td>
+                <td className="px-5 py-2.5 text-right whitespace-nowrap">
+                  <button className="text-[12.5px] font-bold text-hwy hover:underline mr-3" onClick={() => openEdit(c)}>编辑</button>
+                  <button className="text-[12.5px] font-bold text-[#A0522D] hover:underline" onClick={() => void remove(c)}>删除</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+/* ================= 主入口 ================= */
+
+const TABS: { key: Tab; label: string }[] = [
+  { key: 'overview', label: '运营看板' },
+  { key: 'users', label: '用户管理' },
+  { key: 'cars', label: '车辆管理' },
+]
+
+export default function Admin() {
+  const [authed, setAuthed] = useState(false)
+  const [tab, setTab] = useState<Tab>('overview')
+  const [checked, setChecked] = useState(false)
+
+  // 已有口令则静默进入（首个请求 401 时会踢回登录门）
+  useEffect(() => {
+    if (adminApi.hasToken()) setAuthed(true)
+    setChecked(true)
+  }, [])
+
+  if (!checked) return null
+  if (!authed) return <LoginGate onOk={() => setAuthed(true)} />
+
+  return (
+    <div className="min-h-screen bg-paper">
+      {/* 顶栏 */}
+      <header className="bg-asphalt text-white sticky top-0 z-40">
+        <div className="max-w-[1200px] mx-auto px-5 h-[54px] flex items-center gap-4">
+          <span className="sign sign-sm px-3 py-1 font-sign text-[16px] tracking-[.12em] leading-none flex items-center">识途管理后台</span>
+          <span className="ledboard !rounded-[6px] px-2.5 py-[3px] text-[11.5px]">ADMIN CONSOLE</span>
+          <nav className="flex gap-1.5 ml-6">
+            {TABS.map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                className={`px-3.5 py-1.5 rounded-[8px] text-[14px] font-semibold transition-colors ${
+                  tab === t.key ? 'bg-mark text-asphalt font-bold' : 'text-white/80 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </nav>
+          <div className="ml-auto flex items-center gap-4">
+            <Link to="/cars" className="text-[13px] text-white/70 hover:text-white">车主端 →</Link>
+            <button
+              className="text-[13px] text-white/70 hover:text-white"
+              onClick={() => {
+                adminApi.logout()
+                setAuthed(false)
+              }}
+            >
+              退出
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* 面板 */}
+      <main className="max-w-[1200px] mx-auto px-5 py-7">
+        {tab === 'overview' && <OverviewPanel />}
+        {tab === 'users' && <UsersPanel />}
+        {tab === 'cars' && <CarsPanel />}
+      </main>
+
+      <footer className="max-w-[1200px] mx-auto px-5 pb-8 text-faint text-[12px]">
+        管理操作全程入审计（actor=admin）· 与车主侧同一本账
+      </footer>
+    </div>
+  )
+}
