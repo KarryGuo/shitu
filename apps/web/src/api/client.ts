@@ -22,11 +22,30 @@ export class ApiError extends Error {
   }
 }
 
-async function req<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(URL(path), {
+async function fetchOnce(path: string, init?: RequestInit): Promise<Response> {
+  return fetch(URL(path), {
     headers: { 'content-type': 'application/json' },
     ...init,
   })
+}
+
+/**
+ * 统一请求：网络级失败（连接被关闭/断网/休眠实例冷启动）自动重试一次，
+ * 缓解免费托管实例休眠后首个请求 ERR_CONNECTION_CLOSED 的问题。
+ */
+async function req<T>(path: string, init?: RequestInit): Promise<T> {
+  let res: Response
+  try {
+    res = await fetchOnce(path, init)
+  } catch {
+    // 冷启动/瞬时断连：稍候重试一次
+    await new Promise((r) => setTimeout(r, 800))
+    try {
+      res = await fetchOnce(path, init)
+    } catch {
+      throw new ApiError('NETWORK_ERROR', `无法连接服务：${path}`, 0)
+    }
+  }
   if (!res.ok) {
     let code = `HTTP_${res.status}`
     try {

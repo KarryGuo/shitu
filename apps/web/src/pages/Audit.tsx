@@ -5,10 +5,45 @@ import { api, type Metrics, type AuditFeed } from '../api/client'
 import type { RunDTO } from '@shitu/shared'
 
 /**
- * 运行审计（轻量管理后台）：指标看板 + 工具健康 + 运行列表 + 审计日志。
+ * 运行审计（消费者证据页）：指标看板 + 工具健康 + 运行列表 + 审计日志。
  * 数据全部来自后端事实（/api/metrics · /api/runs · /api/audit），
- * 复赛「输出结果可追溯」的直接证据页。
+ * 复赛「输出结果可追溯」的直接证据页。运行列表与审计日志支持分页浏览。
  */
+
+/** 简易分页钩子：数据变化时自动收敛当前页 */
+function usePaged<T>(items: T[], pageSize: number) {
+  const [page, setPage] = useState(1)
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize))
+  const safePage = Math.min(page, totalPages)
+  const paged = items.slice((safePage - 1) * pageSize, safePage * pageSize)
+  return { page: safePage, totalPages, paged, setPage, total: items.length }
+}
+
+/** 分页控件：上一页 / 页码 / 下一页 */
+function Pager({ page, totalPages, total, unit, onPage }: { page: number; totalPages: number; total: number; unit: string; onPage: (p: number) => void }) {
+  if (totalPages <= 1) return null
+  return (
+    <div className="flex items-center justify-center gap-3 pt-3.5 mt-1 border-t border-line">
+      <button
+        className="btn btn-ghost !py-1.5 !px-3.5 !text-[13px]"
+        disabled={page <= 1}
+        onClick={() => onPage(page - 1)}
+      >
+        上一页
+      </button>
+      <span className="text-faint text-[13px] num">
+        {page} / {totalPages} 页 · 共 {total} 条{unit}
+      </span>
+      <button
+        className="btn btn-ghost !py-1.5 !px-3.5 !text-[13px]"
+        disabled={page >= totalPages}
+        onClick={() => onPage(page + 1)}
+      >
+        下一页
+      </button>
+    </div>
+  )
+}
 
 const statusMeta: Record<string, { label: string; cls: string }> = {
   done: { label: '已完成', cls: 'bg-[#E3F1E6] text-[#2E7D46]' },
@@ -40,6 +75,11 @@ export default function Audit() {
   const [error, setError] = useState<string | null>(null)
   const [updatedAt, setUpdatedAt] = useState<string>('')
 
+  /* 运行列表 / 审计日志分页（每页 10 条） */
+  const runPages = usePaged(runs, 10)
+  const auditEntries = audit?.entries ?? []
+  const auditPages = usePaged(auditEntries, 10)
+
   const refresh = useCallback(async () => {
     try {
       const [m, a, r] = await Promise.all([api.getMetrics(), api.getAudit(), api.getRuns()])
@@ -64,12 +104,8 @@ export default function Audit() {
       <SectionHead
         kicker="OPS · 运行审计"
         title="运行证据与指标看板"
-        sub="任务运行、工具调用、降级链路与审计日志的服务端事实聚合 —— 每 10 秒自动刷新，输出结果全程可追溯。管理入口见右上方。"
+        sub="任务运行、工具调用、降级链路与审计日志的服务端事实聚合 —— 每 10 秒自动刷新，输出结果全程可追溯。"
       />
-
-      <div className="flex justify-end -mt-2 mb-3">
-        <a href="#/admin" className="text-[13px] font-bold text-hwy hover:underline">管理后台（用户/车辆/运营看板） →</a>
-      </div>
 
       {error && (
         <div className="card p-5 mb-5 border-[#F9E9E2]">
@@ -110,10 +146,10 @@ export default function Audit() {
       )}
 
       {/* ===== 工具健康表 ===== */}
-      {metrics && metrics.tools.length > 0 && (
-        <section className="mt-8">
-          <SectionHead kicker="TOOLS · 工具调用健康" title="每次调用都有留痕" />
-          <div className="card overflow-x-auto reveal">
+      <section className="mt-8">
+        <SectionHead kicker="TOOLS · 工具调用健康" title="每次调用都有留痕" />
+        <div className="card overflow-x-auto reveal">
+          {metrics && metrics.tools.length > 0 ? (
             <table className="plan-table">
               <thead>
                 <tr>
@@ -136,9 +172,13 @@ export default function Audit() {
                 ))}
               </tbody>
             </table>
-          </div>
-        </section>
-      )}
+          ) : (
+            <div className="text-sub text-[14px] py-8 text-center">
+              暂无工具调用记录 —— 去「保养」或「理赔」页发起一次任务闭环，工具调用数据将自动生成并留痕。
+            </div>
+          )}
+        </div>
+      </section>
 
       {/* ===== 运行列表 ===== */}
       <section className="mt-8">
@@ -148,7 +188,7 @@ export default function Audit() {
             <div className="text-sub text-[14px] py-6 text-center">暂无运行记录 —— 去「保养」或「理赔」页发起一次任务闭环。</div>
           ) : (
             <div className="flex flex-col">
-              {runs.map((r) => {
+              {runPages.paged.map((r) => {
                 const m = statusMeta[r.status] ?? statusMeta.running
                 return (
                   <div key={r.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 py-3 border-b border-line last:border-0">
@@ -170,6 +210,7 @@ export default function Audit() {
               })}
             </div>
           )}
+          <Pager page={runPages.page} totalPages={runPages.totalPages} total={runPages.total} unit="" onPage={runPages.setPage} />
         </div>
       </section>
 
@@ -177,14 +218,14 @@ export default function Audit() {
       <section className="mt-8">
         <SectionHead kicker="AUDIT · 审计日志" title="谁、在什么时候、做了什么" />
         <div className="card p-4 md:p-5 reveal">
-          {!audit || audit.entries.length === 0 ? (
+          {auditEntries.length === 0 ? (
             <div className="text-sub text-[14px] py-6 text-center">暂无审计记录。</div>
           ) : (
             <div className="flex flex-col">
-              {audit.entries.map((e, i) => {
+              {auditPages.paged.map((e, i) => {
                 const m = actorMeta[e.actor] ?? actorMeta.system
                 return (
-                  <div key={`${e.at}-${i}`} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 py-2 border-b border-line last:border-0">
+                  <div key={`${e.at}-${(auditPages.page - 1) * 10 + i}`} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 py-2 border-b border-line last:border-0">
                     <span className="num text-faint text-[12.5px] w-[86px]">{fmtTime(e.at).slice(6)}</span>
                     <span className={`text-[12px] font-bold rounded-md px-2 py-0.5 ${m.cls}`}>{m.label}</span>
                     <span className="num text-[13.5px] font-semibold">{e.action}</span>
@@ -195,6 +236,7 @@ export default function Audit() {
               })}
             </div>
           )}
+          <Pager page={auditPages.page} totalPages={auditPages.totalPages} total={auditPages.total} unit="" onPage={auditPages.setPage} />
         </div>
       </section>
 

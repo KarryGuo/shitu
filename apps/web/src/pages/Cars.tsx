@@ -6,7 +6,11 @@ import { SectionHead, DarkStat } from '../components/ui'
 import { Gauge, CarGlyph, JourneyStrip, type JourneyPoint } from '../components/art'
 import { Icons } from '../components/AppShell'
 import { api, type AskResult } from '../api/client'
-import { BRANDS, getModels, getModelYears, yearOptions, fuelOf, CATALOG_SIZE } from '../data/carModels'
+import { BrandPicker, SeriesPicker, TrimPicker } from '../components/CarPicker'
+import {
+  BRANDS, getSeries, getTrimGroups, fallbackYears, fuelOfTrim,
+  CUR_YEAR,
+} from '../data/carCatalog'
 
 /* ===== 对话式入口：说什么都行，识途基于档案回答并给出行动 ===== */
 
@@ -186,7 +190,8 @@ function AddCarCard({ onDone, collapsible }: { onDone?: () => void; collapsible?
     plateRest: '',
     brand: '',
     model: '',
-    year: String(new Date().getFullYear()),
+    trim: '',
+    year: String(CUR_YEAR),
     fuelType: '汽油',
     purchaseDate: '',
     mileage: '',
@@ -199,27 +204,35 @@ function AddCarCard({ onDone, collapsible }: { onDone?: () => void; collapsible?
   const plateNo = buildPlateNo(form.plateProv, form.plateRest)
 
   const isOtherBrand = form.brand === '其他'
-  const models = getModels(form.brand)
-  const years = yearOptions(form.brand, form.model)
+  const seriesList = getSeries(form.brand)
+  /* 车系下的真实车型（按年款分组）；无数据时前端按年款兜底 */
+  const trimGroups = getTrimGroups(form.brand, form.model)
+  const hasRealTrims = trimGroups.length > 0
   const yearNum = Number(form.year)
 
-  /** 品牌级联：换品牌即清空车系与年款 */
+  /** 品牌级联：换品牌即清空车系与车型 */
   const pickBrand = (v: string) => {
-    setForm((f) => ({ ...f, brand: v, model: '', year: String(new Date().getFullYear()) }))
+    setForm((f) => ({ ...f, brand: v, model: '', trim: '', year: String(CUR_YEAR) }))
   }
-  /** 车系级联：带出燃料建议 + 年款落在车系上市区间内 */
-  const pickModel = (v: string) => {
+  /** 车系级联：清空车型；燃料按车系首个车型名推断；年款取最新年款组 */
+  const pickSeries = (v: string) => {
     setForm((f) => {
-      const fuel = fuelOf(f.brand, v)
-      const [start, end] = getModelYears(f.brand, v)
-      const latest = Math.min(end, new Date().getFullYear())
-      const cur = Number(f.year)
-      return {
-        ...f,
-        model: v,
-        year: String(cur >= start && cur <= latest ? cur : latest),
-        fuelType: fuel ?? f.fuelType,
+      const groups = getTrimGroups(f.brand, v)
+      const latestYear = groups.length > 0 ? groups[groups.length - 1].year : String(CUR_YEAR)
+      const sampleTrim = groups.length > 0 && groups[groups.length - 1].names[0] ? groups[groups.length - 1].names[0] : ''
+      const fuel = sampleTrim ? fuelOfTrim(sampleTrim) : ''
+      return { ...f, model: v, trim: '', year: latestYear, fuelType: fuel || f.fuelType }
+    })
+  }
+  /** 车型级联：确定年款（真实车型取所属年款组；兜底模式取所选年份）+ 推断燃料 */
+  const pickTrim = (v: string) => {
+    setForm((f) => {
+      if (hasRealTrims) {
+        const group = trimGroups.find((g) => g.names.includes(v))
+        const fuel = fuelOfTrim(v)
+        return { ...f, trim: v, year: group ? group.year : f.year, fuelType: fuel || f.fuelType }
       }
+      return { ...f, trim: v, year: v }
     })
   }
 
@@ -229,6 +242,7 @@ function AddCarCard({ onDone, collapsible }: { onDone?: () => void; collapsible?
     PLATE_REST_RE.test(plateRest) &&
     form.brand.trim() &&
     form.model.trim() &&
+    (isOtherBrand || form.trim.trim()) &&
     form.purchaseDate &&
     form.insuranceExpiry &&
     form.inspectionExpiry &&
@@ -240,10 +254,13 @@ function AddCarCard({ onDone, collapsible }: { onDone?: () => void; collapsible?
   const submit = async () => {
     if (!valid || busy) return
     setBusy(true)
+    /* 真实车型：model = 车系 + 版本名；兜底年款：model = 车系名 */
+    const modelName =
+      isOtherBrand || !hasRealTrims ? form.model : `${form.model} ${form.trim}`
     const input: CarFormInput = {
       plateNo,
       brand: form.brand,
-      model: form.model,
+      model: modelName,
       year: yearNum,
       fuelType: form.fuelType,
       purchaseDate: form.purchaseDate,
@@ -308,49 +325,55 @@ function AddCarCard({ onDone, collapsible }: { onDone?: () => void; collapsible?
             </span>
           </div>
           <div>
-            <label className="field-label">品牌 *</label>
-            <select className="field" value={form.brand} onChange={(e) => pickBrand(e.target.value)}>
-              <option value="">选择品牌</option>
-              {BRANDS.map((b) => (
-                <option key={b}>{b}</option>
-              ))}
-              <option value="其他">其他 / 未列出</option>
-            </select>
+            <label className="field-label">品牌 *（按字母排序）</label>
+            <BrandPicker brands={BRANDS} value={form.brand} onChange={pickBrand} />
           </div>
           <div>
             <label className="field-label">车系 *</label>
             {isOtherBrand ? (
               <input
                 className="field"
-                placeholder="手动输入车型，如：smart 精灵#1"
+                placeholder="手动输入车系/车型，如：smart 精灵#1"
                 value={form.model}
                 onChange={(e) => set('model', e.target.value)}
                 maxLength={40}
               />
             ) : (
-              <select className="field" value={form.model} onChange={(e) => pickModel(e.target.value)} disabled={!form.brand}>
-                <option value="">{form.brand ? '选择车系' : '请先选择品牌'}</option>
-                {models.map((m) => (
-                  <option key={m.name}>{m.name}</option>
-                ))}
-              </select>
+              <SeriesPicker series={seriesList} value={form.model} onChange={pickSeries} disabled={!form.brand} />
+            )}
+          </div>
+          <div>
+            <label className="field-label">车型 / 年款 *</label>
+            {isOtherBrand ? (
+              <input
+                className="field"
+                placeholder="手动输入车型版本，如：310km 向往版"
+                value={form.trim}
+                onChange={(e) => set('trim', e.target.value)}
+                maxLength={40}
+              />
+            ) : (
+              <TrimPicker
+                trims={trimGroups}
+                value={form.trim}
+                onChange={pickTrim}
+                disabled={!form.model}
+                fallbackYears={fallbackYears()}
+              />
             )}
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="field-label">年款 *</label>
-              {isOtherBrand ? (
-                <input className="field font-num" type="number" min={1980} max={2100} value={form.year} onChange={(e) => set('year', e.target.value)} />
-              ) : (
-                <select className="field font-num" value={form.year} onChange={(e) => set('year', e.target.value)} disabled={!form.model}>
-                  {!form.model && <option value={String(new Date().getFullYear())}>{new Date().getFullYear()}</option>}
-                  {years.map((y) => (
-                    <option key={y} value={String(y)}>
-                      {y} 款
-                    </option>
-                  ))}
-                </select>
-              )}
+              <input
+                className="field font-num"
+                type="number"
+                min={1980}
+                max={2100}
+                value={form.year}
+                onChange={(e) => set('year', e.target.value)}
+              />
+              <span className="block text-faint text-[11.5px] mt-1.5">选择车型后自动带出，可微调</span>
             </div>
             <div>
               <label className="field-label">燃料 *</label>
@@ -402,7 +425,8 @@ function AddCarCard({ onDone, collapsible }: { onDone?: () => void; collapsible?
           )}
         </div>
         <p className="text-faint text-[12px] mt-4 leading-[1.9]">
-          车型库参考公开车型信息整理（演示数据集，覆盖 {CATALOG_SIZE.brands} 个品牌 · {CATALOG_SIZE.models} 个车系，含停售经典款）；正式版对接汽车之家 / 懂车帝等车型主数据服务，品牌-车系-年款实时同步。
+          车型库数据来自汽车之家 / 懂车帝公开车型库（{BRANDS.length} 个品牌按字母排序 · {BRANDS.reduce((a, b) => a + b.series.length, 0)} 个车系含停售 ·
+          热门车系提供真实车型版本与年款，其余车系按年款选择）；品牌选中后车系自动联动，选车型自动带出年款与燃料类型。
         </p>
       </div>
     </div>

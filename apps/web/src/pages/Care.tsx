@@ -66,8 +66,11 @@ export default function Care() {
     try {
       const r = await api.createCareRun(inject)
       setRun(r)
-    } catch {
-      setApiError('无法连接任务引擎（localhost:8787）。请先启动后端：pnpm dev:api，然后重新开始演示。')
+    } catch (e) {
+      const hint = import.meta.env.DEV
+        ? '无法连接任务引擎（localhost:8787）。请先启动后端：pnpm dev:api，然后重新发起。'
+        : `任务引擎暂时连不上（${e instanceof Error ? e.message : '网络异常'}）。服务可能正在唤醒，请稍等几秒后重试。`
+      setApiError(hint)
       setRun(null)
     } finally {
       setStarting(false)
