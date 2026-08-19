@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { adminApi, type AdminOverview, type AdminUser, type AdminCar } from '../api/client'
+import { AuthShell } from '../components/AuthShell'
 
 /**
  * 管理后台（独立于车主端 AppShell）：
@@ -32,46 +33,75 @@ function LoginGate({ onOk }: { onOk: () => void }) {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#101419] px-6">
-      <div className="w-full max-w-[400px] bg-paper rounded-[16px] shadow-2xl overflow-hidden anim-up">
-        <div className="zebra-soft" />
-        <div className="p-7">
-          <div className="flex items-center gap-2.5">
-            <span className="sign sign-sm !rounded-[8px] px-3 py-1 font-sign text-[15px] tracking-[.1em] h-[30px] flex items-center">识途 · 管理后台</span>
+    <AuthShell
+      signLabel="管理口令"
+      signEn="ADMIN ACCESS"
+      title="识途运营中枢"
+      desc="输入管理口令进入；所有管理操作将记入审计日志，与车主侧同一本账。"
+      brand={{
+        kicker: 'ADMIN CONSOLE · 运营中枢',
+        title: (
+          <>
+            中控台上看得见每一辆车，
+            <br />
+            也看得见<span className="text-mark">识途自己</span>
+          </>
+        ),
+        desc: '运营看板实时呈现任务运行、LLM 与工具调用态势；用户与车辆管理跨账号触达每一份数据 —— 演示环境的每一项管理动作，都留痕可溯。',
+        signs: [
+          { text: '看板', sub: '运行态势一目了然' },
+          { text: '用户', sub: '账号 · 权限 · 状态' },
+          { text: '车辆', sub: '跨用户车辆视图' },
+        ],
+      }}
+      footer={
+        <div className="border-t border-dashed border-line pt-3 text-center">
+          <span className="text-[13.5px] text-sub">管理口令由环境变量 ADMIN_TOKEN 配置</span>
+          <div className="text-[12px] text-faint mt-1.5 leading-[1.8]">
+            演示环境未配置时默认口令 <b className="num">shitu-admin</b> ·{' '}
+            <Link to="/login" className="text-hwy-deep font-bold hover:underline">
+              前往车主端登录 →
+            </Link>
           </div>
-          <h1 className="font-display text-[24px] mt-4">管理员登录</h1>
-          <p className="text-sub text-[13.5px] mt-1.5 mb-6 leading-[1.9]">
-            输入管理口令进入。未配置 ADMIN_TOKEN 时默认口令为 <b className="num">shitu-admin</b>。
-          </p>
-          <form
-            className="flex flex-col gap-4"
-            onSubmit={(e) => {
-              e.preventDefault()
-              void submit()
-            }}
-          >
-            <div>
-              <label className="field-label">管理口令</label>
-              <input
-                className="field"
-                type="password"
-                placeholder="••••••••"
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-                autoFocus
-              />
-            </div>
-            {error && <div className="text-[13px] text-[#A0522D] font-bold">{error}</div>}
-            <button className="btn btn-ink w-full !py-3" disabled={!token.trim() || busy}>
-              {busy ? <span className="thinking"><span /><span /><span /></span> : '进入管理后台'}
-            </button>
-          </form>
-          <Link to="/login" className="block text-center text-faint text-[13px] mt-5 hover:text-sub">
-            ← 前往车主端登录
-          </Link>
         </div>
-      </div>
-    </div>
+      }
+    >
+      <form
+        className="flex flex-col gap-4"
+        onSubmit={(e) => {
+          e.preventDefault()
+          void submit()
+        }}
+      >
+        <div>
+          <label className="field-label">管理口令</label>
+          <input
+            className="field font-num tracking-[.08em]"
+            type="password"
+            placeholder="••••••••"
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            autoFocus
+          />
+        </div>
+        {error && (
+          <div className="rounded-[10px] border border-[#B4552D]/40 bg-[#F9E9E2] px-3.5 py-2.5 text-[13px] text-[#A0522D] font-bold">
+            {error}
+          </div>
+        )}
+        <button className="btn btn-ink w-full !py-3" type="submit" disabled={!token.trim() || busy}>
+          {busy ? (
+            <span className="thinking">
+              <span />
+              <span />
+              <span />
+            </span>
+          ) : (
+            '进入管理后台'
+          )}
+        </button>
+      </form>
+    </AuthShell>
   )
 }
 

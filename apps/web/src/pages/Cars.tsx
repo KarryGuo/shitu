@@ -6,7 +6,7 @@ import { SectionHead, DarkStat } from '../components/ui'
 import { Gauge, CarGlyph, JourneyStrip, type JourneyPoint } from '../components/art'
 import { Icons } from '../components/AppShell'
 import { api, type AskResult } from '../api/client'
-import { BRANDS, getModels, getModelYears, yearOptions, fuelOf } from '../data/carModels'
+import { BRANDS, getModels, getModelYears, yearOptions, fuelOf, CATALOG_SIZE } from '../data/carModels'
 
 /* ===== 对话式入口：说什么都行，识途基于档案回答并给出行动 ===== */
 
@@ -155,12 +155,35 @@ const today = () => new Date().toISOString().slice(0, 10)
 
 const FUELS = ['汽油', '柴油', '纯电', '混动']
 
+/* ===== 车牌录入：省份简称 + 号牌，组合成「湘L·D8296」格式 ===== */
+
+const PLATE_PROVINCES = [
+  '京', '津', '沪', '渝', '冀', '豫', '云', '辽', '黑', '湘', '皖', '鲁', '新', '苏',
+  '浙', '赣', '鄂', '桂', '甘', '晋', '蒙', '陕', '吉', '闽', '贵', '粤', '青', '藏',
+  '川', '宁', '琼',
+]
+
+/** 清洗号牌主体：大写、去 I/O 与非法字符、最多 7 位（城市字母 + 最多 6 位序号） */
+const cleanPlateRest = (v: string) =>
+  v.toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/[IO]/g, '').slice(0, 7)
+
+/** 组装完整车牌：省份 + 城市字母 + · + 序号（如 湘L·D8296） */
+const buildPlateNo = (prov: string, rest: string) => {
+  const r = cleanPlateRest(rest)
+  if (!prov || r.length < 5) return ''
+  return `${prov}${r[0]}·${r.slice(1)}`
+}
+
+/** 号牌主体格式：城市字母 + 4~6 位（第 6 位序号为新能源） */
+const PLATE_REST_RE = /^[A-HJ-NP-Z][A-HJ-NP-Z0-9]{4,6}$/
+
 function AddCarCard({ onDone, collapsible }: { onDone?: () => void; collapsible?: boolean }) {
   const addCar = useApp((s) => s.addCar)
   const [open, setOpen] = useState(!collapsible)
   const [busy, setBusy] = useState(false)
   const [form, setForm] = useState({
-    plateNo: '',
+    plateProv: '',
+    plateRest: '',
     brand: '',
     model: '',
     year: String(new Date().getFullYear()),
@@ -172,6 +195,8 @@ function AddCarCard({ onDone, collapsible }: { onDone?: () => void; collapsible?
     lastMaintenanceMileage: '',
   })
   const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }))
+  const plateRest = cleanPlateRest(form.plateRest)
+  const plateNo = buildPlateNo(form.plateProv, form.plateRest)
 
   const isOtherBrand = form.brand === '其他'
   const models = getModels(form.brand)
@@ -200,7 +225,8 @@ function AddCarCard({ onDone, collapsible }: { onDone?: () => void; collapsible?
 
   const num = (v: string) => Number(v.replace(/[,，\s]/g, ''))
   const valid =
-    form.plateNo.trim().length >= 2 &&
+    !!plateNo &&
+    PLATE_REST_RE.test(plateRest) &&
     form.brand.trim() &&
     form.model.trim() &&
     form.purchaseDate &&
@@ -215,7 +241,7 @@ function AddCarCard({ onDone, collapsible }: { onDone?: () => void; collapsible?
     if (!valid || busy) return
     setBusy(true)
     const input: CarFormInput = {
-      plateNo: form.plateNo,
+      plateNo,
       brand: form.brand,
       model: form.model,
       year: yearNum,
@@ -251,6 +277,36 @@ function AddCarCard({ onDone, collapsible }: { onDone?: () => void; collapsible?
           <span className="text-faint text-[12.5px]">选品牌 → 选车系 → 选年款，识途自动建立提醒与保养周期</span>
         </div>
         <div className="grid sm:grid-cols-2 gap-4 mt-6">
+          {/* 车牌：省份简称 + 号牌，蓝牌样式（新能源 6 位序号自动兼容） */}
+          <div className="sm:col-span-2">
+            <label className="field-label">车牌号 *</label>
+            <div className="inline-flex items-stretch rounded-[10px] overflow-hidden border-[3px] border-white shadow-[0_8px_18px_-8px_rgba(15,40,80,.55)] bg-gradient-to-b from-[#2A62C4] to-[#17418F]">
+              <select
+                className="w-[62px] bg-transparent text-white text-[21px] font-bold text-center outline-none cursor-pointer py-2 appearance-none"
+                value={form.plateProv}
+                onChange={(e) => set('plateProv', e.target.value)}
+              >
+                <option value="" className="text-ink">省</option>
+                {PLATE_PROVINCES.map((p) => (
+                  <option key={p} value={p} className="text-ink">
+                    {p}
+                  </option>
+                ))}
+              </select>
+              <span className="w-[2px] bg-white/70 my-1.5" />
+              <input
+                className="w-[190px] bg-transparent text-white text-[21px] font-num font-bold tracking-[.22em] text-center outline-none py-2 placeholder:text-white/40 placeholder:font-normal placeholder:tracking-[.12em] placeholder:text-[17px]"
+                placeholder="B·D8296"
+                inputMode="text"
+                autoCapitalize="characters"
+                value={form.plateRest}
+                onChange={(e) => set('plateRest', e.target.value)}
+              />
+            </div>
+            <span className="block text-faint text-[12px] mt-2">
+              {plateNo ? `识别为 ${plateNo}` : '城市字母 + 5 位序号；新能源第 6 位序号（如 D/F 开头）自动兼容'}
+            </span>
+          </div>
           <div>
             <label className="field-label">品牌 *</label>
             <select className="field" value={form.brand} onChange={(e) => pickBrand(e.target.value)}>
@@ -346,7 +402,7 @@ function AddCarCard({ onDone, collapsible }: { onDone?: () => void; collapsible?
           )}
         </div>
         <p className="text-faint text-[12px] mt-4 leading-[1.9]">
-          车型库参考公开车型信息整理（演示数据集，覆盖 20 个主流品牌）；正式版对接汽车之家 / 懂车帝等车型主数据服务，品牌-车系-年款实时同步。
+          车型库参考公开车型信息整理（演示数据集，覆盖 {CATALOG_SIZE.brands} 个品牌 · {CATALOG_SIZE.models} 个车系，含停售经典款）；正式版对接汽车之家 / 懂车帝等车型主数据服务，品牌-车系-年款实时同步。
         </p>
       </div>
     </div>

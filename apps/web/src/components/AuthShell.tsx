@@ -3,9 +3,34 @@ import { Link } from 'react-router-dom'
 import { PerspectiveRoad } from './art'
 
 /**
- * 登录 / 注册共享骨架：
+ * 登录 / 注册 / 管理员登录共享骨架：
  * 夜色公路（车尾视角驶向龙门架）+ 左侧品牌叙事 + 右侧「服务区登记窗口」表单卡。
+ * brand 参数可定制左侧叙事（缺省为车主端品牌文案），管理员登录页传入运营中枢叙事。
  */
+
+export interface AuthBrandCopy {
+  kicker: string
+  title: ReactNode
+  desc: string
+  signs: { text: string; sub: string }[]
+}
+
+const DEFAULT_BRAND: AuthBrandCopy = {
+  kicker: 'AI AGENT · 智能用车管家',
+  title: (
+    <>
+      识途识的不是路，
+      <br />
+      是<span className="text-mark">你的车走过的路</span>
+    </>
+  ),
+  desc: '每一次保养、年检、保险与理赔，识途都替你记着、盯着、办妥 —— 给每一辆车一份懂它的档案，给每一位车主一个会办事的伙伴，把「人找服务」变成「服务找人」。',
+  signs: [
+    { text: '知车', sub: '车辆数字档案' },
+    { text: '懂你', sub: '长期记忆与偏好' },
+    { text: '办事', sub: '工具调用 · 任务闭环' },
+  ],
+}
 
 /** 龙门架指路牌方向项 */
 function WaySign({ text, sub, delay }: { text: string; sub: string; delay: number }) {
@@ -27,6 +52,7 @@ export function AuthShell({
   desc,
   children,
   footer,
+  brand = DEFAULT_BRAND,
 }: {
   signLabel: string
   signEn: string
@@ -34,6 +60,7 @@ export function AuthShell({
   desc: string
   children: ReactNode
   footer?: ReactNode
+  brand?: AuthBrandCopy
 }) {
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#101419] text-[#EDEAE2]">
@@ -65,23 +92,20 @@ export function AuthShell({
 
           <div className="mt-8 md:mt-10 max-w-[520px]">
             <div className="kicker !text-mark anim-up" style={{ animationDelay: '60ms' }}>
-              AI AGENT · 智能用车管家
+              {brand.kicker}
             </div>
             <h1 className="font-display text-[32px] md:text-[42px] leading-[1.32] mt-4 anim-up" style={{ animationDelay: '140ms' }}>
-              识途识的不是路，
-              <br />
-              是<span className="text-mark">你的车走过的路</span>
+              {brand.title}
             </h1>
             <p className="text-white/55 text-[15.5px] mt-5 leading-[2] anim-up" style={{ animationDelay: '220ms' }}>
-              每一次保养、年检、保险与理赔，识途都替你记着、盯着、办妥 ——
-              给每一辆车一份懂它的档案，给每一位车主一个会办事的伙伴，把「人找服务」变成「服务找人」。
+              {brand.desc}
             </p>
 
             {/* 指路牌三连：出口方向 */}
             <div className="flex flex-col items-start gap-2.5 mt-8">
-              <WaySign text="知车" sub="车辆数字档案" delay={300} />
-              <WaySign text="懂你" sub="长期记忆与偏好" delay={390} />
-              <WaySign text="办事" sub="工具调用 · 任务闭环" delay={480} />
+              {brand.signs.map((s, i) => (
+                <WaySign key={s.text} text={s.text} sub={s.sub} delay={300 + i * 90} />
+              ))}
             </div>
           </div>
         </div>
