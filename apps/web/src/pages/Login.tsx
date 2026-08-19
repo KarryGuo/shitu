@@ -1,35 +1,60 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { useApp, DEMO_ACCOUNT, isDemoAccount } from '../stores/app'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { useApp, DEMO_ACCOUNT } from '../stores/app'
 import { AuthShell } from '../components/AuthShell'
+import { authApi, ApiError } from '../api/client'
 
 /**
- * 登录：邮箱即身份，一步进入（体验环境免验证）。
- * 正式版规划：邮箱验证码 / 短信 OTP / 微信登录 —— 架构预留（store.login 已按身份隔离数据入口）。
+ * 登录：手机号即身份，提交后端校验是否已注册（users 表）。
+ * - 未注册 → 明确提示并引导去注册（携带手机号预填）
+ * - 已禁用 → 提示联系管理员
+ * - 演示账号（邮箱）兼容，供评审一键体验
+ * 正式版规划：短信 OTP 验证码登录。
  */
 
+const isPhone = (v: string) => /^1[3-9]\d{9}$/.test(v.trim())
+const isEmail = (v: string) => /.+@.+\..+/.test(v.trim())
+
 export default function Login() {
-  const [email, setEmail] = useState('')
+  const [params] = useSearchParams()
+  const [account, setAccount] = useState(params.get('account') ?? '')
   const [entering, setEntering] = useState(false)
+  const [error, setError] = useState<{ msg: string; needRegister?: boolean } | null>(null)
   const login = useApp((s) => s.login)
   const navigate = useNavigate()
 
-  const valid = /.+@.+\..+/.test(email)
+  const valid = isPhone(account) || isEmail(account)
+  const accountTrim = account.trim()
 
-  const enter = () => {
+  const enter = async () => {
     if (!valid || entering) return
     setEntering(true)
-    login(email)
-    // 新注册用户（空车库）与演示账号都先到档案页：前者进入建档引导，后者直接看演示档案
-    navigate('/cars')
+    setError(null)
+    try {
+      const r = await authApi.login(accountTrim)
+      login(r.user.account, r.user.name)
+      // 新注册用户（空车库）与演示账号都先到档案页：前者进入建档引导，后者直接看演示档案
+      navigate('/cars')
+    } catch (e) {
+      if (e instanceof ApiError) {
+        if (e.code === 'USER_NOT_FOUND')
+          setError({ msg: '该账号尚未注册', needRegister: true })
+        else if (e.code === 'USER_DISABLED') setError({ msg: '该账号已被禁用，请联系管理员' })
+        else setError({ msg: e.message })
+      } else {
+        setError({ msg: '登录服务暂不可用，请稍后再试' })
+      }
+    } finally {
+      setEntering(false)
+    }
   }
 
   return (
     <AuthShell
       signLabel="服务区 · 登记"
-      signEn="EMAIL SIGN-IN"
+      signEn="PHONE SIGN-IN"
       title="欢迎回到识途"
-      desc="输入邮箱即可进入；正式版接入邮箱验证码与短信 OTP 登录。"
+      desc="输入注册手机号即可进入；正式版接入短信验证码登录。"
       footer={
         <div className="flex flex-col gap-3">
           <div className="border-t border-dashed border-line pt-3 text-center">
@@ -38,7 +63,7 @@ export default function Login() {
               注册一个 →
             </Link>
           </div>
-          {isDemoAccount(email) && (
+          {accountTrim === DEMO_ACCOUNT && (
             <div className="badge-soft w-full text-center !text-[12.5px] py-1.5">
               演示账号：将载入预置示例档案（保养/年检/保险/理赔全流程可体验）
             </div>
@@ -50,20 +75,37 @@ export default function Login() {
         className="flex flex-col gap-4"
         onSubmit={(e) => {
           e.preventDefault()
-          enter()
+          void enter()
         }}
       >
         <div>
-          <label className="field-label">邮箱地址</label>
+          <label className="field-label">手机号</label>
           <input
-            className="field"
-            type="email"
-            placeholder="you@example.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            className="field font-num tracking-[.06em]"
+            type="text"
+            inputMode="tel"
+            placeholder="请输入注册手机号"
+            value={account}
+            onChange={(e) => setAccount(e.target.value)}
+            maxLength={40}
             autoFocus
           />
         </div>
+
+        {error && (
+          <div className="rounded-[10px] border border-[#B4552D]/40 bg-[#F9E9E2] px-3.5 py-2.5 text-[13px] text-[#A0522D] font-bold flex items-center justify-between gap-2.5">
+            <span>{error.msg}</span>
+            {error.needRegister && (
+              <Link
+                to={`/register?account=${encodeURIComponent(accountTrim)}`}
+                className="shrink-0 underline underline-offset-2"
+              >
+                去注册 →
+              </Link>
+            )}
+          </div>
+        )}
+
         <button className="btn btn-ink w-full !py-3" type="submit" disabled={!valid || entering}>
           {entering ? (
             <span className="thinking">
@@ -85,7 +127,7 @@ export default function Login() {
         <button
           type="button"
           className="font-num font-semibold text-hwy-deep bg-hwy-tint rounded-md px-2 py-0.5 hover:bg-hwy/15 transition-colors tracking-[.04em]"
-          onClick={() => setEmail(DEMO_ACCOUNT)}
+          onClick={() => setAccount(DEMO_ACCOUNT)}
         >
           {DEMO_ACCOUNT}
         </button>

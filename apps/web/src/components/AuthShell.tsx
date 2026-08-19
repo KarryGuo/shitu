@@ -36,17 +36,17 @@ export function AuthShell({
   footer?: ReactNode
 }) {
   return (
-    <div className="relative min-h-screen flex flex-col overflow-hidden bg-[#101419] text-[#EDEAE2]">
-      {/* ===== 夜色公路（页面底部，透视龙门架） ===== */}
-      <div className="relative mt-auto w-full max-w-[920px] mx-auto shrink-0">
-        <div className="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-[#101419] to-transparent z-10 pointer-events-none" />
-        <PerspectiveRoad />
+    <div className="relative min-h-screen overflow-hidden bg-[#101419] text-[#EDEAE2]">
+      {/* ===== 夜色公路：压扁为底部背景层（高度受控，不再挤占表单空间） ===== */}
+      <div className="absolute inset-x-0 bottom-0 h-[34vh] max-h-[330px] min-h-[190px] overflow-hidden pointer-events-none" aria-hidden>
+        <PerspectiveRoad className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[min(100%,860px)] opacity-90" />
+        <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-[#101419] via-[#101419]/70 to-transparent" />
       </div>
 
-      {/* ===== 主内容 ===== */}
-      <div className="relative z-20 flex-1 grid md:grid-cols-[1.15fr_.85fr] gap-10 lg:gap-14 items-center max-w-[1080px] w-full mx-auto px-6 md:px-8 pt-14 pb-6 md:pt-10">
-        {/* -- 左：品牌 -- */}
-        <div className="relative">
+      {/* ===== 主内容（移动端表单置顶：打开即见；桌面端左品牌右表单） ===== */}
+      <div className="relative z-20 grid md:grid-cols-[1.1fr_.9fr] gap-10 lg:gap-14 items-center max-w-[1080px] w-full mx-auto px-6 md:px-8 py-12 md:py-16 pb-[24vh] md:pb-[30vh]">
+        {/* -- 左：品牌（移动端排在表单之下） -- */}
+        <div className="relative order-2 md:order-1">
           {/* 竖排水印 */}
           <div className="hidden lg:block absolute -right-2 top-1/2 -translate-y-1/2 [writing-mode:vertical-rl] font-sign text-[38px] tracking-[.55em] text-white/[.13] select-none pointer-events-none">
             识车之途
@@ -86,8 +86,8 @@ export function AuthShell({
           </div>
         </div>
 
-        {/* -- 右：服务区办卡窗口 -- */}
-        <div className="w-full max-w-[420px] justify-self-center md:justify-self-end">
+        {/* -- 右：服务区办卡窗口（移动端置顶） -- */}
+        <div className="w-full max-w-[420px] justify-self-center md:justify-self-end order-1 md:order-2">
           <div className="relative bg-concrete text-ink rounded-[16px] shadow-[0_30px_60px_-30px_rgba(0,0,0,.8)] anim-up" style={{ animationDelay: '180ms' }}>
             <div className="zebra-soft rounded-t-[16px]" />
             <div className="p-6 md:p-7">

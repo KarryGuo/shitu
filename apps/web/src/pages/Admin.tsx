@@ -66,8 +66,8 @@ function LoginGate({ onOk }: { onOk: () => void }) {
               {busy ? <span className="thinking"><span /><span /><span /></span> : '进入管理后台'}
             </button>
           </form>
-          <Link to="/cars" className="block text-center text-faint text-[13px] mt-5 hover:text-sub">
-            ← 返回车主端
+          <Link to="/login" className="block text-center text-faint text-[13px] mt-5 hover:text-sub">
+            ← 前往车主端登录
           </Link>
         </div>
       </div>
@@ -83,6 +83,87 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
       <div className="text-faint text-[12.5px] tracking-[.04em]">{label}</div>
       <div className="font-num font-bold text-[26px] mt-1 leading-none">{value}</div>
       {sub && <div className="text-sub text-[12.5px] mt-1.5">{sub}</div>}
+    </div>
+  )
+}
+
+/* ---- 可视化：环形图 / 分段条（纯 SVG + CSS，无三方依赖） ---- */
+
+const SCENARIO_META: Record<string, { label: string; color: string }> = {
+  care: { label: '保养任务', color: 'var(--hwy)' },
+  claim: { label: '理赔任务', color: 'var(--mark)' },
+}
+const STATUS_META: Record<string, { label: string; color: string }> = {
+  done: { label: '已完成', color: '#3F6B3A' },
+  cancelled: { label: '已取消', color: '#B4552D' },
+  running: { label: '进行中', color: 'var(--mark)' },
+  awaiting_choice: { label: '待确认', color: '#6B5B33' },
+}
+
+function Donut({
+  segments,
+  total,
+}: {
+  segments: { label: string; value: number; color: string }[]
+  total: number
+}) {
+  const R = 52
+  const C = 2 * Math.PI * R
+  let acc = 0
+  return (
+    <div className="relative w-[136px] h-[136px] shrink-0">
+      <svg viewBox="0 0 140 140" className="w-full h-full -rotate-90">
+        <circle cx="70" cy="70" r={R} fill="none" stroke="var(--concrete-2)" strokeWidth="16" />
+        {segments.map((s) => {
+          const dash = total > 0 ? (s.value / total) * C : 0
+          const el = (
+            <circle
+              key={s.label}
+              cx="70"
+              cy="70"
+              r={R}
+              fill="none"
+              stroke={s.color}
+              strokeWidth="16"
+              strokeDasharray={`${dash} ${C - dash}`}
+              strokeDashoffset={-acc}
+            />
+          )
+          acc += dash
+          return el
+        })}
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <div className="font-num font-bold text-[26px] leading-none">{total}</div>
+        <div className="text-faint text-[11px] mt-1">总任务</div>
+      </div>
+    </div>
+  )
+}
+
+function StackedBar({ items }: { items: { label: string; value: number; color: string }[] }) {
+  const total = items.reduce((a, b) => a + b.value, 0)
+  return (
+    <div>
+      <div className="flex h-[14px] rounded-full overflow-hidden bg-concrete-2">
+        {items
+          .filter((i) => i.value > 0)
+          .map((i) => (
+            <div
+              key={i.label}
+              style={{ width: `${(i.value / Math.max(1, total)) * 100}%`, background: i.color }}
+              title={`${i.label} ${i.value}`}
+            />
+          ))}
+      </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-2.5 text-[12px] text-sub">
+        {items.map((i) => (
+          <span key={i.label} className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-[3px]" style={{ background: i.color }} />
+            {i.label} <b className="font-num">{i.value}</b>
+          </span>
+        ))}
+      </div>
     </div>
   )
 }
@@ -103,6 +184,17 @@ function OverviewPanel() {
   if (!data) return <div className="card p-6 text-sub">看板加载中…</div>
 
   const maxRuns = Math.max(1, ...data.trend.map((d) => d.runs))
+  const scenarioSegments = Object.entries(data.runs.byScenario).map(([k, v]) => ({
+    label: SCENARIO_META[k]?.label ?? k,
+    value: v,
+    color: SCENARIO_META[k]?.color ?? 'var(--asphalt-3)',
+  }))
+  const statusItems = Object.entries(data.runs.byStatus).map(([k, v]) => ({
+    label: STATUS_META[k]?.label ?? k,
+    value: v,
+    color: STATUS_META[k]?.color ?? 'var(--faint)',
+  }))
+  const maxToolCalls = Math.max(1, ...data.tools.map((t) => t.calls))
 
   return (
     <div className="flex flex-col gap-5">
@@ -145,6 +237,82 @@ function OverviewPanel() {
           <span className="flex items-center gap-1.5"><span className="w-3 h-[3px] bg-hwy rounded" />运行数</span>
           <span className="flex items-center gap-1.5"><span className="w-3 h-[3px] bg-mark rounded" />含降级</span>
           <span className="text-faint ml-auto">审计条目 {data.auditTotal} · 更新于 {data.at.slice(11, 19)}</span>
+        </div>
+      </div>
+
+      {/* 任务构成 & 工具调用 */}
+      <div className="grid md:grid-cols-2 gap-5">
+        {/* 任务构成环形图 + 状态分布 */}
+        <div className="card p-6">
+          <div className="kicker !text-hwy">MIX · 任务构成</div>
+          {data.runs.total === 0 ? (
+            <p className="text-sub text-[13.5px] mt-4 leading-[1.9]">
+              暂无任务记录——在车主端发起一次保养或理赔任务后，这里会展示场景与状态分布。
+            </p>
+          ) : (
+            <>
+              <div className="flex items-center gap-7 mt-5">
+                <Donut segments={scenarioSegments} total={data.runs.total} />
+                <div className="flex flex-col gap-3 min-w-0">
+                  {scenarioSegments.map((s) => (
+                    <div key={s.label} className="flex items-center gap-2.5 text-[13.5px]">
+                      <span className="w-2.5 h-2.5 rounded-[3px] shrink-0" style={{ background: s.color }} />
+                      <span className="text-sub">{s.label}</span>
+                      <b className="font-num text-[15px]">{s.value}</b>
+                      <span className="text-faint text-[12px] font-num ml-auto">
+                        {Math.round((s.value / data.runs.total) * 100)}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="mt-6 pt-5 border-t border-line">
+                <div className="text-faint text-[12.5px] mb-3">状态分布</div>
+                <StackedBar items={statusItems} />
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* 工具调用 Top 榜 */}
+        <div className="card p-6">
+          <div className="kicker !text-hwy">TOOLS · 工具调用 Top</div>
+          {data.tools.length === 0 ? (
+            <p className="text-sub text-[13.5px] mt-4 leading-[1.9]">
+              暂无工具调用记录——任务执行过程中的手册检索、门店搜索等工具会自动计入。
+            </p>
+          ) : (
+            <div className="flex flex-col gap-3.5 mt-5">
+              {data.tools.map((t) => (
+                <div key={t.name} className="flex items-center gap-3">
+                  <span className="w-[158px] shrink-0 truncate text-[13px] font-semibold" title={t.name}>
+                    {t.name}
+                  </span>
+                  <div className="flex-1 h-[16px] rounded-[4px] bg-concrete-2 overflow-hidden">
+                    <div
+                      className="h-full rounded-[4px] transition-all"
+                      style={{
+                        width: `${Math.max(3, (t.calls / maxToolCalls) * 100)}%`,
+                        background: t.failed > 0 ? '#B4552D' : t.degraded > 0 ? 'var(--mark)' : 'var(--hwy)',
+                        opacity: t.failed > 0 || t.degraded > 0 ? 0.9 : 0.85,
+                      }}
+                    />
+                  </div>
+                  <span className="font-num text-[13px] font-bold w-[36px] text-right">{t.calls}</span>
+                  <span className="w-[72px] text-right text-[11.5px] whitespace-nowrap">
+                    {t.failed > 0 ? (
+                      <span className="text-[#B4552D] font-bold">失败 {t.failed}</span>
+                    ) : t.degraded > 0 ? (
+                      <span className="text-[#8C6A1E] font-bold">降级 {t.degraded}</span>
+                    ) : (
+                      <span className="text-faint">正常</span>
+                    )}
+                  </span>
+                </div>
+              ))}
+              <div className="text-[11.5px] text-faint mt-1">按调用量取前 6 · 条长 = 调用次数 · 颜色 = 健康度</div>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -223,7 +391,7 @@ function UsersPanel() {
             void create()
           }}
         >
-          <input className="field !w-[220px]" type="email" placeholder="邮箱" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
+          <input className="field !w-[220px]" placeholder="手机号或邮箱" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
           <input className="field !w-[160px]" placeholder="姓名" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required maxLength={40} />
           <select className="field !w-[120px]" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as 'user' | 'admin' })}>
             <option value="user">车主</option>
@@ -239,7 +407,7 @@ function UsersPanel() {
         <table className="w-full text-[13.5px]">
           <thead>
             <tr className="text-left text-faint text-[12px] border-b border-line">
-              <th className="px-5 py-2.5 font-semibold">邮箱</th>
+              <th className="px-5 py-2.5 font-semibold">账号</th>
               <th className="px-3 py-2.5 font-semibold">姓名</th>
               <th className="px-3 py-2.5 font-semibold">角色</th>
               <th className="px-3 py-2.5 font-semibold">状态</th>
@@ -438,15 +606,15 @@ export default function Admin() {
     <div className="min-h-screen bg-paper">
       {/* 顶栏 */}
       <header className="bg-asphalt text-white sticky top-0 z-40">
-        <div className="max-w-[1200px] mx-auto px-5 h-[54px] flex items-center gap-4">
-          <span className="sign sign-sm px-3 py-1 font-sign text-[16px] tracking-[.12em] leading-none flex items-center">识途管理后台</span>
-          <span className="ledboard !rounded-[6px] px-2.5 py-[3px] text-[11.5px]">ADMIN CONSOLE</span>
-          <nav className="flex gap-1.5 ml-6">
+        <div className="max-w-[1200px] mx-auto px-5 h-[68px] flex items-center gap-4">
+          <span className="sign sign-sm px-4 py-2 font-sign text-[17px] tracking-[.12em] leading-none flex items-center shrink-0">识途管理后台</span>
+          <span className="ledboard !rounded-[6px] px-2.5 py-[3px] text-[11.5px] hidden sm:inline-block">ADMIN CONSOLE</span>
+          <nav className="flex gap-1.5 ml-4 md:ml-6 overflow-x-auto">
             {TABS.map((t) => (
               <button
                 key={t.key}
                 onClick={() => setTab(t.key)}
-                className={`px-3.5 py-1.5 rounded-[8px] text-[14px] font-semibold transition-colors ${
+                className={`px-3.5 py-2 rounded-[8px] text-[14px] font-semibold transition-colors whitespace-nowrap ${
                   tab === t.key ? 'bg-mark text-asphalt font-bold' : 'text-white/80 hover:text-white hover:bg-white/10'
                 }`}
               >
@@ -454,8 +622,8 @@ export default function Admin() {
               </button>
             ))}
           </nav>
-          <div className="ml-auto flex items-center gap-4">
-            <Link to="/cars" className="text-[13px] text-white/70 hover:text-white">车主端 →</Link>
+          <div className="ml-auto flex items-center gap-4 shrink-0">
+            <Link to="/login" className="text-[13px] text-white/70 hover:text-white">车主端 →</Link>
             <button
               className="text-[13px] text-white/70 hover:text-white"
               onClick={() => {

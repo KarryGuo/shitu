@@ -40,6 +40,29 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T
 }
 
+/* ---------- 账号体系（注册/登录校验走后端 users 表） ---------- */
+
+export interface AuthUser {
+  account: string
+  name: string
+  role: string
+}
+
+export const authApi = {
+  /** 登录：后端校验账号是否已注册（USER_NOT_FOUND / USER_DISABLED 有明确 code） */
+  login: (account: string) =>
+    req<{ ok: true; user: AuthUser }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ account }),
+    }),
+  /** 注册：手机号 + 昵称，409 = 已注册 */
+  register: (account: string, name: string) =>
+    req<{ ok: true; user: AuthUser }>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ account, name }),
+    }),
+}
+
 export const api = {
   createCareRun: (inject: InjectMode) =>
     req<RunDTO>('/care/runs', { method: 'POST', body: JSON.stringify({ scenario: 'care', inject }) }),
@@ -144,6 +167,7 @@ export interface AdminOverview {
     successRate: number | null
   }
   llm: { total: number; degraded: number; provider: string; keyConfigured: boolean }
+  tools: { name: string; calls: number; degraded: number; failed: number }[]
   trend: { date: string; runs: number; done: number; degraded: number }[]
   auditTotal: number
 }

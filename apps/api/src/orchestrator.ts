@@ -1,7 +1,7 @@
 import crypto from 'node:crypto'
 import type { RunDTO, RunStepDTO, InjectMode, ToolCallRecord, AuditEntry, ClaimChoice } from '@shitu/shared'
 import { mutate, getState, uid, nowIso } from './store.js'
-import { getCar, addEvent, addBooking, markReminderDone, DEMO_TODAY } from './profile.js'
+import { getCar, getMainCar, addEvent, addBooking, completeCareReminder, DEMO_TODAY } from './profile.js'
 import { senseMaintenance } from './rules.js'
 import {
   manualSearch, shopSearch, priceCompare, ratingAggregate,
@@ -99,7 +99,7 @@ export function getRun(runId: string): RunDTO | undefined {
 
 async function executeCare(runId: string, ttlSec: number) {
   const run = getState().runs.find((r) => r.id === runId)!
-  const car = getCar('c1')
+  const car = getMainCar()
 
   /* ---- STEP 1 感知（规则引擎，不依赖 LLM） ---- */
   await sleep(paceMs * 0.5)
@@ -370,7 +370,7 @@ export function chooseClaim(runId: string, choice: ClaimChoice): { ok: boolean; 
 async function executeClaim(runId: string) {
   const run = getState().runs.find((r) => r.id === runId)!
   const choice: ClaimChoice = run.choice ?? 'self'
-  const car = getCar('c1')
+  const car = getMainCar()
 
   /* ---- STEP 执行（材料清单 / 门店匹配 / 幂等提交）---- */
   await sleep(paceMs * 0.6)
@@ -425,7 +425,7 @@ async function executeClaim(runId: string) {
 
 async function executeBooking(runId: string) {
   const run = getState().runs.find((r) => r.id === runId)!
-  const car = getCar('c1')
+  const car = getMainCar()
   const quoteStep = run.steps.find((st) => st.table)
   const best = quoteStep?.table?.find((r) => r.best) ?? quoteStep?.table?.[0]
   const shopName = best?.name ?? '畅行连锁养护'
@@ -470,7 +470,7 @@ async function executeBooking(runId: string) {
     title: '保养预约（已确认）',
     detail: `${shopName} · 预估 ¥${price} · ${car.state.mileage.toLocaleString()} km 时按手册周期预约`,
   })
-  markReminderDone('r1')
+  completeCareReminder(car.static.id)
   pushStep(runId, {
     kind: 'writeback', seal: '成', title: '识途 · 已办完',
     body: '本次记录已写入档案（事件域 + 预约单），作为下次保养预测与残值依据；对应提醒已关闭。',

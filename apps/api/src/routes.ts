@@ -1,11 +1,13 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { ErrorCodes } from '@shitu/shared'
-import { getState, mutate, loadState } from './store.js'
+import { loadUserRows, upsertUserRow } from '@shitu/db'
+import { getState, mutate, loadState, uid, nowIso } from './store.js'
 import { getProfile, resetProfile, seedProfile, setActiveCar } from './profile.js'
 import { createCareRun, createClaimRun, chooseClaim, getRun, decideRun } from './orchestrator.js'
 import { nearbySearch, type NearbyKind } from './amap.js'
 import { askAgent } from './ask.js'
+import { seedUsers } from './admin.js'
 
 /** 启动：载入/播种状态（loadState 内处理重启恢复语义；Turso 就绪） */
 export async function initState() {
@@ -15,6 +17,49 @@ export async function initState() {
 const err = (code: string, message: string, statusCode = 400) => ({ statusCode, code, message })
 
 export async function registerRoutes(app: FastifyInstance) {
+  /* ---------- 账号体系：手机号注册 / 登录（users 表直读写，注册校验走后端） ---------- */
+  const PHONE_RE = /^1[3-9]\d{9}$/
+  const ACCOUNT_RE = /^(1[3-9]\d{9}|[^@\s]+@[^@\s]+\.[^@\s]+)$/
+
+  app.post('/api/auth/register', async (req, reply) => {
+    const body = z
+      .object({ account: z.string().regex(PHONE_RE, '手机号格式有误'), name: z.string().min(1).max(40) })
+      .safeParse(req.body ?? {})
+    if (!body.success) return reply.status(400).send(err('INVALID_BODY', '请输入正确的手机号和昵称'))
+    const { account, name } = body.data
+    await seedUsers()
+    const rows = await loadUserRows()
+    if (rows.some((u) => u.email === account))
+      return reply.status(409).send(err('USER_EXISTS', '该手机号已注册，请直接登录'))
+    const u = {
+      id: uid('u'), email: account, name, role: 'user', status: 'active',
+      created_at: nowIso(), last_login_at: nowIso(),
+    }
+    await upsertUserRow(u)
+    mutate((s) => {
+      s.audit.push({ at: nowIso(), actor: 'user', action: 'auth.register', detail: `新用户注册 ${account}` })
+    })
+    return reply.status(201).send({ ok: true, user: { account: u.email, name: u.name, role: u.role } })
+  })
+
+  app.post('/api/auth/login', async (req, reply) => {
+    const body = z
+      .object({ account: z.string().regex(ACCOUNT_RE, '账号格式有误') })
+      .safeParse(req.body ?? {})
+    if (!body.success) return reply.status(400).send(err('INVALID_BODY', '请输入正确的手机号或邮箱'))
+    const { account } = body.data
+    await seedUsers()
+    const rows = await loadUserRows()
+    const u = rows.find((r) => r.email === account)
+    if (!u) return reply.status(404).send(err('USER_NOT_FOUND', '该账号尚未注册'))
+    if (u.status !== 'active') return reply.status(403).send(err('USER_DISABLED', '该账号已被禁用，请联系管理员'))
+    await upsertUserRow({ ...u, last_login_at: nowIso() })
+    mutate((s) => {
+      s.audit.push({ at: nowIso(), actor: 'user', action: 'auth.login', detail: `用户登录 ${account}` })
+    })
+    return { ok: true, user: { account: u.email, name: u.name, role: u.role } }
+  })
+
   /* ---------- 任务闭环（care 场景） ---------- */
   const RunCreateSchema = z.object({
     scenario: z.literal('care').default('care'),

@@ -6,6 +6,7 @@ import { SectionHead, DarkStat } from '../components/ui'
 import { Gauge, CarGlyph, JourneyStrip, type JourneyPoint } from '../components/art'
 import { Icons } from '../components/AppShell'
 import { api, type AskResult } from '../api/client'
+import { BRANDS, getModels, getModelYears, yearOptions, fuelOf } from '../data/carModels'
 
 /* ===== 对话式入口：说什么都行，识途基于档案回答并给出行动 ===== */
 
@@ -162,7 +163,7 @@ function AddCarCard({ onDone, collapsible }: { onDone?: () => void; collapsible?
     plateNo: '',
     brand: '',
     model: '',
-    year: new Date().getFullYear(),
+    year: String(new Date().getFullYear()),
     fuelType: '汽油',
     purchaseDate: '',
     mileage: '',
@@ -171,6 +172,31 @@ function AddCarCard({ onDone, collapsible }: { onDone?: () => void; collapsible?
     lastMaintenanceMileage: '',
   })
   const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }))
+
+  const isOtherBrand = form.brand === '其他'
+  const models = getModels(form.brand)
+  const years = yearOptions(form.brand, form.model)
+  const yearNum = Number(form.year)
+
+  /** 品牌级联：换品牌即清空车系与年款 */
+  const pickBrand = (v: string) => {
+    setForm((f) => ({ ...f, brand: v, model: '', year: String(new Date().getFullYear()) }))
+  }
+  /** 车系级联：带出燃料建议 + 年款落在车系上市区间内 */
+  const pickModel = (v: string) => {
+    setForm((f) => {
+      const fuel = fuelOf(f.brand, v)
+      const [start, end] = getModelYears(f.brand, v)
+      const latest = Math.min(end, new Date().getFullYear())
+      const cur = Number(f.year)
+      return {
+        ...f,
+        model: v,
+        year: String(cur >= start && cur <= latest ? cur : latest),
+        fuelType: fuel ?? f.fuelType,
+      }
+    })
+  }
 
   const num = (v: string) => Number(v.replace(/[,，\s]/g, ''))
   const valid =
@@ -181,7 +207,9 @@ function AddCarCard({ onDone, collapsible }: { onDone?: () => void; collapsible?
     form.insuranceExpiry &&
     form.inspectionExpiry &&
     form.mileage !== '' &&
-    num(form.mileage) >= 0
+    num(form.mileage) >= 0 &&
+    yearNum >= 1980 &&
+    yearNum <= 2100
 
   const submit = async () => {
     if (!valid || busy) return
@@ -190,7 +218,7 @@ function AddCarCard({ onDone, collapsible }: { onDone?: () => void; collapsible?
       plateNo: form.plateNo,
       brand: form.brand,
       model: form.model,
-      year: Number(form.year),
+      year: yearNum,
       fuelType: form.fuelType,
       purchaseDate: form.purchaseDate,
       mileage: num(form.mileage),
@@ -220,25 +248,53 @@ function AddCarCard({ onDone, collapsible }: { onDone?: () => void; collapsible?
       <div className="p-6 md:p-8">
         <div className="flex flex-wrap items-center gap-2.5">
           <span className="kicker !text-hwy">NEW CAR · 车辆入档</span>
-          <span className="text-faint text-[12.5px]">只填关键字段，识途自动建立提醒与保养周期</span>
+          <span className="text-faint text-[12.5px]">选品牌 → 选车系 → 选年款，识途自动建立提醒与保养周期</span>
         </div>
         <div className="grid sm:grid-cols-2 gap-4 mt-6">
           <div>
-            <label className="field-label">车牌号 *</label>
-            <input className="field" placeholder="如：湘A·12345" value={form.plateNo} onChange={(e) => set('plateNo', e.target.value)} maxLength={12} />
-          </div>
-          <div>
             <label className="field-label">品牌 *</label>
-            <input className="field" placeholder="如：大众" value={form.brand} onChange={(e) => set('brand', e.target.value)} maxLength={20} />
+            <select className="field" value={form.brand} onChange={(e) => pickBrand(e.target.value)}>
+              <option value="">选择品牌</option>
+              {BRANDS.map((b) => (
+                <option key={b}>{b}</option>
+              ))}
+              <option value="其他">其他 / 未列出</option>
+            </select>
           </div>
           <div>
-            <label className="field-label">车型 *</label>
-            <input className="field" placeholder="如：2023 款 · 330TSI 豪华版" value={form.model} onChange={(e) => set('model', e.target.value)} maxLength={40} />
+            <label className="field-label">车系 *</label>
+            {isOtherBrand ? (
+              <input
+                className="field"
+                placeholder="手动输入车型，如：smart 精灵#1"
+                value={form.model}
+                onChange={(e) => set('model', e.target.value)}
+                maxLength={40}
+              />
+            ) : (
+              <select className="field" value={form.model} onChange={(e) => pickModel(e.target.value)} disabled={!form.brand}>
+                <option value="">{form.brand ? '选择车系' : '请先选择品牌'}</option>
+                {models.map((m) => (
+                  <option key={m.name}>{m.name}</option>
+                ))}
+              </select>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="field-label">年款 *</label>
-              <input className="field" type="number" min={1980} max={2100} value={form.year} onChange={(e) => set('year', e.target.value)} />
+              {isOtherBrand ? (
+                <input className="field font-num" type="number" min={1980} max={2100} value={form.year} onChange={(e) => set('year', e.target.value)} />
+              ) : (
+                <select className="field font-num" value={form.year} onChange={(e) => set('year', e.target.value)} disabled={!form.model}>
+                  {!form.model && <option value={String(new Date().getFullYear())}>{new Date().getFullYear()}</option>}
+                  {years.map((y) => (
+                    <option key={y} value={String(y)}>
+                      {y} 款
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
             <div>
               <label className="field-label">燃料 *</label>
@@ -289,6 +345,9 @@ function AddCarCard({ onDone, collapsible }: { onDone?: () => void; collapsible?
             </button>
           )}
         </div>
+        <p className="text-faint text-[12px] mt-4 leading-[1.9]">
+          车型库参考公开车型信息整理（演示数据集，覆盖 20 个主流品牌）；正式版对接汽车之家 / 懂车帝等车型主数据服务，品牌-车系-年款实时同步。
+        </p>
       </div>
     </div>
   )

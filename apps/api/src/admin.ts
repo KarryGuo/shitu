@@ -33,9 +33,9 @@ function auditAdmin(action: string, detail: string) {
   })
 }
 
-/** 播种演示用户（首访时） */
+/** 播种演示用户（首访时；auth 路由也会调用，保证演示账号可直接登录） */
 let usersSeeded = false
-async function seedUsers() {
+export async function seedUsers() {
   if (usersSeeded) return
   await ensureSchema()
   const rows = await loadUserRows()
@@ -69,6 +69,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     const byScenario: Record<string, number> = {}
     let degradedRuns = 0
     const llmCalls = { total: 0, degraded: 0 }
+    const tools = new Map<string, { calls: number; degraded: number; failed: number }>()
     // 近 7 日趋势（按天聚合）
     const days: { date: string; runs: number; done: number; degraded: number }[] = []
     const today = new Date()
@@ -95,6 +96,11 @@ export async function registerAdminRoutes(app: FastifyInstance) {
             llmCalls.total++
             if (t.status === 'degraded') llmCalls.degraded++
           }
+          const agg = tools.get(t.name) ?? { calls: 0, degraded: 0, failed: 0 }
+          agg.calls++
+          if (t.status === 'degraded') agg.degraded++
+          if (t.status === 'failed') agg.failed++
+          tools.set(t.name, agg)
         }
       }
     }
@@ -119,6 +125,10 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         successRate: finished ? Math.round((done / finished) * 100) : null,
       },
       llm: { ...llmCalls, provider: process.env.LLM_PROVIDER ?? 'rule', keyConfigured: !!process.env.DASHSCOPE_API_KEY },
+      tools: [...tools.entries()]
+        .map(([name, t]) => ({ name, ...t }))
+        .sort((a, b) => b.calls - a.calls)
+        .slice(0, 6),
       trend: days,
       auditTotal: s.audit.length,
     }
@@ -135,15 +145,15 @@ export async function registerAdminRoutes(app: FastifyInstance) {
   app.post('/api/admin/users', async (req, reply) => {
     if (!requireAdmin(req, reply)) return
     const body = z.object({
-      email: z.string().email(),
+      email: z.string().regex(/^(1[3-9]\d{9}|[^@\s]+@[^@\s]+\.[^@\s]+)$/, '账号须为手机号或邮箱'),
       name: z.string().min(1).max(40),
       role: z.enum(['user', 'admin']).default('user'),
     }).safeParse(req.body ?? {})
-    if (!body.success) return reply.status(400).send({ statusCode: 400, code: 'INVALID_BODY', message: 'email/name/role required' })
+    if (!body.success) return reply.status(400).send({ statusCode: 400, code: 'INVALID_BODY', message: '账号须为手机号或邮箱；name/role required' })
     const { email, name, role } = body.data
     const existing = await loadUserRows()
     if (existing.some((u) => u.email === email))
-      return reply.status(409).send({ statusCode: 409, code: 'EMAIL_EXISTS', message: '邮箱已存在' })
+      return reply.status(409).send({ statusCode: 409, code: 'EMAIL_EXISTS', message: '该账号已存在' })
     const u = { id: uid('u'), email, name, role, status: 'active', created_at: nowIso(), last_login_at: null }
     await upsertUserRow(u)
     auditAdmin('admin.user.create', `创建用户 ${email}（${role}）`)

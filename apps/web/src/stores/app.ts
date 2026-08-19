@@ -136,7 +136,11 @@ export const useApp = create<AppState>((set, get) => ({
   ...(loadUser() ? loadAccountData(loadUser()!.email) : { cars: [], reminders: [], bookings: [], prefs: defaultPrefs }),
 
   login: (email, nickname) => {
-    const u = { email, nickname: nickname?.trim() || email.split('@')[0] }
+    // 默认昵称：邮箱取 @ 前缀；手机号脱敏显示（138****0001）
+    const fallback = email.includes('@')
+      ? email.split('@')[0]
+      : email.replace(/^(\d{3})\d{4}(\d{4})$/, '$1****$2')
+    const u = { email, nickname: nickname?.trim() || fallback }
     saveUser(u)
     set({ user: u, ...loadAccountData(email) })
   },
