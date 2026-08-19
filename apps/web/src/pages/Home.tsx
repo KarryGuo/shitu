@@ -149,7 +149,7 @@ function AerialRoad() {
         <line x1="620" y1="29" x2="620" y2="46" stroke="#3a414b" strokeWidth="4" />
         <rect x="452" y="46" width="216" height="52" rx="9" fill="#0D7A4F" />
         <rect x="459" y="53" width="202" height="38" rx="5" fill="none" stroke="rgba(255,255,255,.85)" strokeWidth="2" />
-        <text x="560" y="72" textAnchor="middle" fontSize="19" fill="#fff" letterSpacing="3" fontFamily="'ZCOOL QingKe HuangYou','Noto Sans SC',sans-serif">识途服务区</text>
+        <text x="560" y="72" textAnchor="middle" fontSize="19" fill="#fff" letterSpacing="3" fontFamily="'Alimama DongFangDaKai','Noto Sans SC',sans-serif">识途服务区</text>
         <text x="560" y="88" textAnchor="middle" fontSize="10.5" fill="rgba(255,255,255,.8)" letterSpacing="2" fontFamily="'Barlow Condensed',sans-serif">SHITU SERVICE · 2 km →</text>
       </g>
 
@@ -157,7 +157,7 @@ function AerialRoad() {
       <g transform="translate(388,600)">
         <rect width="64" height="46" rx="8" fill="#eceade" stroke="#b9b7ae" strokeWidth="2" />
         <rect x="3" y="3" width="58" height="10" rx="5" fill="#0D7A4F" />
-        <text x="32" y="30" textAnchor="middle" fontSize="14" fontWeight="700" fill="#1B1F24" letterSpacing="1" fontFamily="'ZCOOL QingKe HuangYou','Noto Sans SC',sans-serif">每一程</text>
+        <text x="32" y="30" textAnchor="middle" fontSize="14" fontWeight="700" fill="#1B1F24" letterSpacing="1" fontFamily="'Alimama DongFangDaKai','Noto Sans SC',sans-serif">每一程</text>
         <text x="32" y="41" textAnchor="middle" fontSize="8" fill="#5d646d" letterSpacing="1" fontFamily="'Noto Sans SC',sans-serif">都 · 入 · 档</text>
       </g>
 
