@@ -2,6 +2,7 @@ import { createBrowserRouter } from 'react-router-dom'
 import { AppShell } from './components/AppShell'
 import Home from './pages/Home'
 import Login from './pages/Login'
+import Register from './pages/Register'
 import Cars from './pages/Cars'
 import CarDetail from './pages/CarDetail'
 import Care from './pages/Care'
@@ -15,6 +16,7 @@ export const router = createBrowserRouter(
   [
     { path: '/', element: <Home /> },
     { path: '/login', element: <Login /> },
+    { path: '/register', element: <Register /> },
     { path: '/admin', element: <Admin /> },
     {
       element: <AppShell />,
