@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { useApp } from '../stores/app'
+import { useApp, isDemoAccount, type CarFormInput } from '../stores/app'
 import { useReveal } from '../hooks/useReveal'
 import { SectionHead, DarkStat } from '../components/ui'
 import { Gauge, CarGlyph, JourneyStrip, type JourneyPoint } from '../components/art'
@@ -148,6 +148,203 @@ const kindLabel: Record<string, string> = {
   custom: '自定义',
 }
 
+/* ===== 车主建档：录入自己的车（静态域 + 动态域关键字段，一次入档） ===== */
+
+const today = () => new Date().toISOString().slice(0, 10)
+
+const FUELS = ['汽油', '柴油', '纯电', '混动']
+
+function AddCarCard({ onDone, collapsible }: { onDone?: () => void; collapsible?: boolean }) {
+  const addCar = useApp((s) => s.addCar)
+  const [open, setOpen] = useState(!collapsible)
+  const [busy, setBusy] = useState(false)
+  const [form, setForm] = useState({
+    plateNo: '',
+    brand: '',
+    model: '',
+    year: new Date().getFullYear(),
+    fuelType: '汽油',
+    purchaseDate: '',
+    mileage: '',
+    insuranceExpiry: '',
+    inspectionExpiry: '',
+    lastMaintenanceMileage: '',
+  })
+  const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }))
+
+  const num = (v: string) => Number(v.replace(/[,，\s]/g, ''))
+  const valid =
+    form.plateNo.trim().length >= 2 &&
+    form.brand.trim() &&
+    form.model.trim() &&
+    form.purchaseDate &&
+    form.insuranceExpiry &&
+    form.inspectionExpiry &&
+    form.mileage !== '' &&
+    num(form.mileage) >= 0
+
+  const submit = async () => {
+    if (!valid || busy) return
+    setBusy(true)
+    const input: CarFormInput = {
+      plateNo: form.plateNo,
+      brand: form.brand,
+      model: form.model,
+      year: Number(form.year),
+      fuelType: form.fuelType,
+      purchaseDate: form.purchaseDate,
+      mileage: num(form.mileage),
+      mileageAt: today(),
+      insuranceExpiry: form.insuranceExpiry,
+      inspectionExpiry: form.inspectionExpiry,
+      lastMaintenanceMileage: form.lastMaintenanceMileage !== '' ? num(form.lastMaintenanceMileage) : undefined,
+    }
+    addCar(input)
+    // 给后端同步留一拍（提醒 id 以服务端返回为准）
+    await new Promise((r) => setTimeout(r, 600))
+    setBusy(false)
+    onDone?.()
+  }
+
+  if (collapsible && !open) {
+    return (
+      <button className="tool-chip !text-[14px] !py-1.5" onClick={() => setOpen(true)}>
+        ＋ 再添加一辆车
+      </button>
+    )
+  }
+
+  return (
+    <div className="card overflow-hidden anim-up">
+      <div className="zebra-soft" />
+      <div className="p-6 md:p-8">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <span className="kicker !text-hwy">NEW CAR · 车辆入档</span>
+          <span className="text-faint text-[12.5px]">只填关键字段，识途自动建立提醒与保养周期</span>
+        </div>
+        <div className="grid sm:grid-cols-2 gap-4 mt-6">
+          <div>
+            <label className="field-label">车牌号 *</label>
+            <input className="field" placeholder="如：湘A·12345" value={form.plateNo} onChange={(e) => set('plateNo', e.target.value)} maxLength={12} />
+          </div>
+          <div>
+            <label className="field-label">品牌 *</label>
+            <input className="field" placeholder="如：大众" value={form.brand} onChange={(e) => set('brand', e.target.value)} maxLength={20} />
+          </div>
+          <div>
+            <label className="field-label">车型 *</label>
+            <input className="field" placeholder="如：2023 款 · 330TSI 豪华版" value={form.model} onChange={(e) => set('model', e.target.value)} maxLength={40} />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="field-label">年款 *</label>
+              <input className="field" type="number" min={1980} max={2100} value={form.year} onChange={(e) => set('year', e.target.value)} />
+            </div>
+            <div>
+              <label className="field-label">燃料 *</label>
+              <select className="field" value={form.fuelType} onChange={(e) => set('fuelType', e.target.value)}>
+                {FUELS.map((f) => (
+                  <option key={f}>{f}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="field-label">购车日期 *</label>
+            <input className="field" type="date" value={form.purchaseDate} onChange={(e) => set('purchaseDate', e.target.value)} />
+          </div>
+          <div>
+            <label className="field-label">当前里程（km）*</label>
+            <input className="field" type="number" min={0} placeholder="如：43200" value={form.mileage} onChange={(e) => set('mileage', e.target.value)} />
+          </div>
+          <div>
+            <label className="field-label">保险到期日 *</label>
+            <input className="field" type="date" value={form.insuranceExpiry} onChange={(e) => set('insuranceExpiry', e.target.value)} />
+          </div>
+          <div>
+            <label className="field-label">年检到期日 *</label>
+            <input className="field" type="date" value={form.inspectionExpiry} onChange={(e) => set('inspectionExpiry', e.target.value)} />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="field-label">上次保养时的里程（选填，用于计算保养周期）</label>
+            <input className="field" type="number" min={0} placeholder="不填则从当前里程开始计算周期" value={form.lastMaintenanceMileage} onChange={(e) => set('lastMaintenanceMileage', e.target.value)} />
+          </div>
+        </div>
+        <div className="flex items-center gap-3 mt-6 flex-wrap">
+          <button className="btn btn-bronze !py-2.5 !px-7" disabled={!valid || busy} onClick={() => void submit()}>
+            {busy ? (
+              <span className="thinking">
+                <span />
+                <span />
+                <span />
+              </span>
+            ) : (
+              '落档 · 开始照看'
+            )}
+          </button>
+          {valid ? null : <span className="text-faint text-[12.5px]">带 * 为必填</span>}
+          {collapsible && (
+            <button className="text-faint text-[13px] hover:text-sub ml-auto" onClick={() => setOpen(false)}>
+              收起
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ===== 空车库引导：新账号从自己录入的第一辆车开始 ===== */
+
+function EmptyGarage() {
+  const user = useApp((s) => s.user)
+  const demo = user ? isDemoAccount(user.email) : false
+  return (
+    <div className="pb-10">
+      <div className="ink-card relative overflow-hidden anim-up p-6 md:p-10">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <div className="kicker !text-mark">MY GARAGE · 我的车库</div>
+            <h1 className="font-display text-[30px] md:text-[38px] text-white mt-4 leading-[1.3]">
+              车库还是空的，
+              <br />
+              从录入你的第一辆车开始
+            </h1>
+            <p className="text-white/55 text-[15px] mt-4 leading-[2] max-w-[560px]">
+              识途不预填任何假数据 —— 车牌、里程、保险与年检到期日由你自己录入，
+              之后识途基于这份档案替你记着、盯着、办妥每一件事。
+            </p>
+          </div>
+          <CarGlyph className="w-44 h-24 opacity-70 hidden sm:block" />
+        </div>
+        <div className="flex flex-wrap gap-x-7 gap-y-2.5 mt-7">
+          {[
+            ['一次录入', '档案三域自动建立'],
+            ['到期主动', '保险/年检/保养提醒'],
+            ['越用越懂', '事件履历持续沉淀'],
+          ].map(([a, b]) => (
+            <span key={a} className="flex items-center gap-2 text-[13.5px] text-white/65">
+              <span className="w-[7px] h-[7px] rounded-[2px] bg-mark inline-block shrink-0" />
+              <b className="text-white">{a}</b>
+              {b}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-8">
+        <AddCarCard />
+      </div>
+
+      {demo && (
+        <p className="text-faint text-[13px] mt-6 leading-[1.9]">
+          演示说明：当前为演示账号但未载入示例档案 —— 可在「设置」页点击「重置样例数据」恢复预置档案，用于体验保养/理赔全流程。
+        </p>
+      )}
+    </div>
+  )
+}
+
 export default function Cars() {
   const cars = useApp((s) => s.cars)
   const reminders = useApp((s) => s.reminders)
@@ -155,6 +352,9 @@ export default function Cars() {
   const reminderSnooze = useApp((s) => s.reminderSnooze)
   const navigate = useNavigate()
   const revealRef = useReveal()
+
+  // 空车库（新注册账号）：进入建档引导 —— 数据由车主自己录入，识途不预填
+  if (cars.length === 0) return <EmptyGarage />
 
   const car = cars[0]
   const pending = reminders.filter((r) => r.status === 'pending' || r.status === 'snoozed')
