@@ -5,6 +5,7 @@ import { getState, mutate, loadState } from './store.js'
 import { getProfile, resetProfile, seedProfile } from './profile.js'
 import { createCareRun, createClaimRun, chooseClaim, getRun, decideRun } from './orchestrator.js'
 import { nearbySearch, type NearbyKind } from './amap.js'
+import { askAgent } from './ask.js'
 
 /** 启动：载入/播种状态（loadState 内处理重启恢复语义；Turso 就绪） */
 export async function initState() {
@@ -86,6 +87,25 @@ export async function registerRoutes(app: FastifyInstance) {
   app.post('/api/profile/reset', async () => {
     resetProfile()
     return getProfile()
+  })
+
+  /* ---------- 对话式入口（自然语言问诊：档案事实 + LLM 表达 + 规则兜底） ---------- */
+  const AskSchema = z.object({ question: z.string().min(1).max(500) })
+
+  app.post('/api/ask', async (req, reply) => {
+    const parsed = AskSchema.safeParse(req.body ?? {})
+    if (!parsed.success) return reply.status(400).send(err('INVALID_BODY', 'question required (1–500 字)'))
+    const result = await askAgent(parsed.data.question, getProfile())
+    // 审计留痕（actor=user：车主主动发起的问询）
+    mutate((s) => {
+      s.audit.push({
+        at: new Date().toISOString(),
+        actor: 'user',
+        action: 'chat.ask',
+        detail: `${parsed.data.question.slice(0, 40)}… → ${result.provider}`,
+      })
+    })
+    return result
   })
 
   /* ---------- 地图工具（高德适配器：mock 默认 + AMAP_KEY 真实切换） ---------- */

@@ -57,6 +57,18 @@ export const api = {
   getMetrics: () => req<Metrics>('/metrics'),
   getAudit: () => req<AuditFeed>('/audit'),
   getRuns: () => req<{ runs: RunDTO[] }>('/runs'),
+  ask: (question: string) =>
+    req<AskResult>('/ask', { method: 'POST', body: JSON.stringify({ question }) }),
+}
+
+/** 对话式问诊（POST /api/ask） */
+export interface AskResult {
+  text: string
+  provider: string
+  degraded: boolean
+  note?: string
+  actions: { kind: 'care' | 'claim' | 'profile'; label: string }[]
+  facts: string[]
 }
 
 /** 指标看板（/api/metrics） */

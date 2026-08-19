@@ -1,9 +1,145 @@
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useApp } from '../stores/app'
 import { useReveal } from '../hooks/useReveal'
 import { SectionHead, DarkStat } from '../components/ui'
 import { Gauge, CarGlyph, JourneyStrip, type JourneyPoint } from '../components/art'
 import { Icons } from '../components/AppShell'
+import { api, type AskResult } from '../api/client'
+
+/* ===== 对话式入口：说什么都行，识途基于档案回答并给出行动 ===== */
+
+const SUGGESTED = ['我的车最近要注意什么？', '保养大概要花多少钱？', '剐蹭了怎么办？']
+
+interface ChatTurn {
+  role: 'user' | 'agent'
+  text: string
+  result?: AskResult
+}
+
+function AskCard() {
+  const navigate = useNavigate()
+  const [turns, setTurns] = useState<ChatTurn[]>([])
+  const [input, setInput] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [showFacts, setShowFacts] = useState(false)
+
+  const ask = async (q: string) => {
+    const question = q.trim()
+    if (!question || busy) return
+    setTurns((t) => [...t, { role: 'user', text: question }])
+    setInput('')
+    setBusy(true)
+    try {
+      const result = await api.ask(question)
+      setTurns((t) => [...t, { role: 'agent', text: result.text, result }])
+    } catch {
+      setTurns((t) => [...t, { role: 'agent', text: '后端暂时连不上，请稍后再试。' }])
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const last = [...turns].reverse().find((t) => t.role === 'agent' && t.result)?.result
+
+  return (
+    <div className="card p-6 md:p-7 reveal">
+      <div className="flex flex-wrap items-center gap-2.5">
+        <span className="kicker !text-hwy">ASK · 问识途</span>
+        <span className="text-faint text-[12.5px]">基于车辆档案回答 · 说什么都行</span>
+      </div>
+
+      {/* 建议问题 */}
+      <div className="flex flex-wrap gap-2.5 mt-4">
+        {SUGGESTED.map((s) => (
+          <button key={s} className="tool-chip" onClick={() => void ask(s)} disabled={busy}>
+            {s}
+          </button>
+        ))}
+      </div>
+
+      {/* 对话流 */}
+      {turns.length > 0 && (
+        <div className="flex flex-col gap-3 mt-5">
+          {turns.map((t, i) =>
+            t.role === 'user' ? (
+              <div key={i} className="self-end max-w-[85%] bg-hwy text-white rounded-[14px] rounded-br-[4px] px-4 py-2.5 text-[14.5px]">
+                {t.text}
+              </div>
+            ) : (
+              <div key={i} className="self-start max-w-[92%] bg-concrete rounded-[14px] rounded-bl-[4px] px-4 py-3">
+                <p className="text-[14.5px] whitespace-pre-line leading-relaxed">{t.text}</p>
+                {t.result?.degraded && t.result.note && (
+                  <p className="text-[12.5px] text-[#8C6A1E] mt-1.5">⚠ {t.result.note}</p>
+                )}
+              </div>
+            ),
+          )}
+          {busy && (
+            <div className="self-start bg-concrete rounded-[14px] rounded-bl-[4px] px-4 py-3 text-[14px] text-sub">
+              识途正在翻档案…
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 行动建议 + 依据 */}
+      {last && !busy && (
+        <div className="mt-4 flex flex-col gap-3">
+          {last.actions.length > 0 && (
+            <div className="flex flex-wrap gap-2.5">
+              {last.actions.map((a) => (
+                <button
+                  key={a.label}
+                  className="btn btn-bronze !py-2 !px-4 !text-[14px]"
+                  onClick={() =>
+                    navigate(a.kind === 'care' ? '/care' : a.kind === 'claim' ? '/claim' : `/cars/${useApp.getState().cars[0]?.static.id ?? ''}`)
+                  }
+                >
+                  {a.label} →
+                </button>
+              ))}
+            </div>
+          )}
+          <button className="text-left text-faint text-[12.5px] hover:text-sub" onClick={() => setShowFacts((v) => !v)}>
+            {showFacts ? '收起依据' : '回答依据（档案事实）'} {showFacts ? '▲' : '▼'}
+          </button>
+          {showFacts && (
+            <ul className="text-sub text-[13px] flex flex-col gap-1 pl-1">
+              {last.facts.map((f, i) => (
+                <li key={i}>· {f}</li>
+              ))}
+            </ul>
+          )}
+          <div className="text-faint text-[11.5px]">
+            生成：{last.provider}
+            {last.degraded ? '（降级）' : ''} · 事实来自车辆档案，LLM 只负责表达
+          </div>
+        </div>
+      )}
+
+      {/* 输入框 */}
+      <form
+        className="mt-5 flex gap-2.5"
+        onSubmit={(e) => {
+          e.preventDefault()
+          void ask(input)
+        }}
+      >
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="例如：下个月我要跑长途，该检查什么？"
+          className="flex-1 border border-line rounded-[10px] px-4 py-2.5 text-[14.5px] bg-paper focus:outline-none focus:border-hwy"
+          maxLength={500}
+        />
+        <button type="submit" className="btn btn-ink !py-2 !px-5 !text-[14px]" disabled={busy || !input.trim()}>
+          问识途
+        </button>
+      </form>
+    </div>
+  )
+}
 
 const kindLabel: Record<string, string> = {
   maintenance: '保养',
@@ -98,6 +234,16 @@ export default function Cars() {
           <JourneyStrip past={journeyPast} now={{ km: car.state.mileage.toLocaleString() }} future={journeyFuture} />
         </div>
       </div>
+
+      {/* ===== 对话式入口（问识途） ===== */}
+      <section className="mt-12">
+        <SectionHead
+          kicker="AGENT · 对话式入口"
+          title="问识途：说什么都行"
+          sub="基于车辆档案三域回答，LLM 只负责表达、事实全部可溯源；回答附带可一键执行的行动建议。"
+        />
+        <AskCard />
+      </section>
 
       {/* ===== 提醒 ===== */}
       <section className="mt-12">
