@@ -21,10 +21,10 @@ export default {
         bronze: { DEFAULT: '#0D7A4F', deep: '#0A5F3C', bg: '#E9F4EE' },
       },
       fontFamily: {
-        sign: ['"ZCOOL QingKe HuangYou"', '"Noto Sans SC"', 'sans-serif'],
+        sign: ['"Alimama DongFangDaKai"', '"Noto Sans SC"', 'sans-serif'],
         num: ['"Barlow Condensed"', '"Noto Sans SC"', 'sans-serif'],
         sans: ['"Noto Sans SC"', '"Microsoft YaHei"', 'sans-serif'],
-        serif: ['"ZCOOL QingKe HuangYou"', '"Noto Sans SC"', 'sans-serif'],
+        serif: ['"Alimama DongFangDaKai"', '"Noto Sans SC"', 'sans-serif'],
       },
       boxShadow: {
         card: '0 1px 0 #DBD9D1',
